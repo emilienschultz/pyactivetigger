@@ -1,5 +1,6 @@
-import { FC } from 'react';
+import { FC, useState } from 'react';
 import { SubmitHandler, useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 
 import { LoginParams, login, me } from '../../core/api';
 import { useAppContext } from '../../core/context';
@@ -7,13 +8,28 @@ import { useAppContext } from '../../core/context';
 export const LoginForm: FC = () => {
   const { setAppContext } = useAppContext();
   const { handleSubmit, register } = useForm<LoginParams>();
+  const navigate = useNavigate();
+  const [error, setError] = useState(String);
 
   const onSubmit: SubmitHandler<LoginParams> = async (data) => {
-    const response = await login(data);
-    if (response.access_token) {
-      const user = await me(response.access_token);
-      if (user) setAppContext({ user: { ...user, access_token: response.access_token } });
-      else setAppContext({ user: undefined });
+    try {
+      //catch the error throw by login ?
+      const response = await login(data);
+
+      console.log(response);
+      if (response.access_token) {
+        const user = await me(response.access_token);
+        if (user) {
+          // if user authentified
+          setAppContext({ user: { ...user, access_token: response.access_token } });
+          navigate('/projects'); //redirect to the projects page
+        } else {
+          setAppContext({ user: undefined });
+          setError('Error in user authentification');
+        }
+      }
+    } catch (e) {
+      setError('Error in user authentification');
     }
   };
 
@@ -23,6 +39,11 @@ export const LoginForm: FC = () => {
       <input className="form-control form-appearance mt-2" type="text" {...register('username')} />
       <input className="form-control mt-2" type="password" {...register('password')} />
       <button className="btn btn-primary btn-validation">Login</button>
+      {error && (
+        <div className="alert alert-danger mt-3" role="alert">
+          {error}
+        </div>
+      )}
     </form>
 
     // TODO : rediriger vers l'application si validé ?

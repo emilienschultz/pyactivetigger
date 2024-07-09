@@ -16,9 +16,11 @@ export async function login(params: LoginParams) {
     body: params,
     bodySerializer: (body) => new URLSearchParams(body as Record<string, string>),
   });
-
   if (res.data && !res.error) return res.data;
-  else throw new Error(res.error.detail?.map((d) => d.msg).join('; '));
+  //else throw new Error(res.error.detail?.map((d) => d.msg).join('; '));
+  else throw new Error("Try again");
+
+
 }
 
 export async function me(token: string) {
