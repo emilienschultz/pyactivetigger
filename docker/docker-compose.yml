@@ -46,7 +46,11 @@ services:
       - HF_HOME=/home/python/.cache/huggingface
       - UV_LINK_MODE=copy
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/version', timeout=5)\" || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:4000/version'', timeout=5)" || exit 1',
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -63,6 +67,8 @@ services:
       - API_PORT=${API_PORT}
       - MODE=${MODE}
       - VITE_API_URL=${API_URL}
+  redis:
+    image: redis:${REDIS_VERSION}
 volumes:
   venv_data:
   uv_cache:

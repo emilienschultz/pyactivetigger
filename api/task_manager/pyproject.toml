@@ -1,0 +1,43 @@
+[project]
+name = "task-manager"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Paul Girard", email = "paul@ouestware.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "celery[redis]>=5.6.3",
+    "requests>=2.34.2",
+    "watchdog>=6.0.0",
+]
+
+[project.scripts]
+celery-worker-cpu = "task_manager.worker:start_cpu_worker_pool"
+
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = [
+  "I",           # isort
+
+  "ICN",         # flake8-import-conventions
+  "PGH",         # pygrep-hooks
+
+  "YTT",         # flake8-2020
+  "EXE",         # flake8-executable
+
+]
+unfixable = [
+  # Don't touch print statements
+  "T201",
+  # Don't touch noqa lines
+  "RUF100",
+]

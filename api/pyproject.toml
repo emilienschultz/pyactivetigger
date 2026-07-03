@@ -73,6 +73,7 @@ dependencies = [
 		"codecarbon>=2.7.0",
 		"wtpsplit>=2.1.0",
 		"python-docx>=1.1.0",
+		"task_manager"
 ]
 
 # torch/torchvision live in mutually exclusive extras (see tool.uv.conflicts):
@@ -152,6 +153,10 @@ fr-core-news-sm = { url = "https://github.com/explosion/spacy-models/releases/do
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz" }
 torch = [{ index = "pytorch-cpu", extra = "cpu" }]
 torchvision = [{ index = "pytorch-cpu", extra = "cpu" }]
+task_manager = { workspace = true }	
+
+[tool.uv.workspace]
+members = ["task_manager"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

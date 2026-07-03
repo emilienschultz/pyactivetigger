@@ -20,3 +20,6 @@ services:
       - ${PROJECT_PATH}/docker/nginx.${MODE}.conf:/etc/nginx/conf.d/default.conf
       - ${PROJECT_PATH}/frontend/dist:/var/www/frontend
       - ${DATA_PATH}/projects/static:/api/static
+  redis:
+    ports:
+      - ${REDIS_PORT}:6379

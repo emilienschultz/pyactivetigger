@@ -67,6 +67,13 @@ if [ ! -f /api/config.yaml ]; then
     fi
 fi
 
+# Launch workers
+uv run watchmedo auto-restart \
+    --directory="./task_manager/src/task_manager/tasks" \
+    --pattern="*.py" \
+    --recursive \
+    -- uv run celery-worker-cpu &
+
 # Launch the server
 echo "Launching API on port $API_PORT..."
 
