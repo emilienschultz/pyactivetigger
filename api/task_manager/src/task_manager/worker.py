@@ -4,6 +4,7 @@
 
 
 from task_manager import config
+from task_manager.ManagedTask import QueueName
 from task_manager.celery import celery_app
 
 
@@ -15,7 +16,7 @@ def start_cpu_worker_pool():
         "worker",
         f"--loglevel={config.worker_loglevel}",
         f"--concurrency={config.cpu_worker_concurrency}",
-        "--queues=CPU",
+        f"--queues={QueueName.CPU}",
         "--hostname=worker_cpu@%h",
         # "--purge",
     ]

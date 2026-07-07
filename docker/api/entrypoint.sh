@@ -69,7 +69,7 @@ fi
 
 # Launch workers
 uv run watchmedo auto-restart \
-    --directory="./task_manager/src/task_manager/tasks" \
+    --directory="./task_manager/src/task_manager/" \
     --pattern="*.py" \
     --recursive \
     -- uv run celery-worker-cpu &
