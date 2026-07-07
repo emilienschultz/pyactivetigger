@@ -4,7 +4,7 @@
 
 
 from task_manager import config
-from task_manager.ManagedTask import QueueName
+from task_manager.auto_callback_task import QueueName
 from task_manager.celery import celery_app
 
 

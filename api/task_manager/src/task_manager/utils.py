@@ -1,12 +1,13 @@
 import json
 import os
 from typing import TypedDict
-from celery.utils.log import get_task_logger
+
 import requests
+from celery.utils.log import get_task_logger
 
 
-class TaskResultForCallback(TypedDict):
-    results: any
+class TaskResultForCallback[R](TypedDict):
+    results: R
     task_name: str
     
 # trigger orchestrator callback

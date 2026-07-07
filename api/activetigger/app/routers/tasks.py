@@ -1,14 +1,17 @@
 import logging
 
 from fastapi import APIRouter, Body
-from pydantic import BaseModel
-from task_manager.celery import tasks_callbacks
+from pydantic import BaseModel, ConfigDict, Json
 from task_manager.tasks.hello_world import hello_world_task
+
+from activetigger.tasks import all_callbacks
 
 
 class CallbackModel(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     task_id: str
-    results: str
+    results: any  # ty:ignore[invalid-type-form]
     task_name: str
 
 
@@ -30,9 +33,10 @@ def task_callback(
     logger.info(f"task {task_result.task_id} succeed with result {task_result.results} {task_result.task_name}")
     
     # check if a completion callback is available
-    callback = tasks_callbacks[task_result.task_name]
+    callback = all_callbacks.task_callbacks[task_result.task_name]
     if callback:
-        callback(task_result);
+        logger.info(f"execute callback for task {task_result.task_name} {task_result.task_id}")
+        callback(task_result.task_id, task_result.results)
     return True
 
 
@@ -42,7 +46,7 @@ def task_callback(
     # TODO: add a Task API key verification
     # dependencies=[Depends(verified_user)],
 )
-def task_callback(
+def task_hello_world(
     name: str
 ) :
     """

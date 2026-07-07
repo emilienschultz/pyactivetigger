@@ -1,28 +1,26 @@
+from typing import TypedDict
+
 from celery import Task
 from celery.utils.log import get_task_logger
 
+from task_manager.auto_callback_task import AutoCallbackTask, QueueName
 from task_manager.celery import celery_app
-from task_manager.ManagedTask import QueueName, ManagedTask
 
 
-# Task definition encapsulating all Task logic including the on_complete callback
-class HelloWorldTask(ManagedTask):
+class HelloWorldTaskResult(TypedDict):
+    sentence:str
+
+# Task definition using the auto callback generic parent task class
+class HelloWorldTask(AutoCallbackTask):
     name = "hello world"
     queue = QueueName.CPU
     
-    @staticmethod
-    def run(self:Task, your_name: str | None):   
+    def run(self:Task, your_name: str | None)->HelloWorldTaskResult:   
         logger = get_task_logger(HelloWorldTask.name)
         logger.info(f"Start hello world {your_name}")
-        results = f"Hello {your_name if your_name else 'World'}!"
+        results:HelloWorldTaskResult = {'sentence':f"Hello {your_name if your_name else 'World'}!"}
         return results
     
-    @staticmethod
-    def on_complete(task_result):
-        # code executed from orchestrator
-        print(f"log from on complete: {task_result}")
-        print(f"processing completion of task {task_result.task_id} with result {task_result.results}")
-
 # Task registration
 @celery_app.task(bind=True, name=HelloWorldTask.name, queue=HelloWorldTask.queue, base=HelloWorldTask)
 def hello_world_task(self, your_name:str):
