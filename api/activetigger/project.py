@@ -12,6 +12,7 @@ import pandas as pd
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pandas import DataFrame
+from task_manager.tasks.create_project_task import CreateProjectTaskInput, create_project_task
 
 from activetigger.bertopic_manager import Bertopic
 from activetigger.config import config
@@ -387,6 +388,19 @@ class Project:
 
         # add the dedicated directory
         params.dir = path.joinpath(self.project_slug)
+
+        # new way to create task project
+        create_project_task.s(CreateProjectTaskInput(
+                project_slug=self.project_slug,
+                params=params,
+                username=username,
+                data_all=config.data_all,
+                train_file=config.train_file,
+                valid_file=config.valid_file,
+                test_file=config.test_file,
+                features_file=config.features_file,
+                random_seed=config.random_seed,).model_dump()).apply_async()
+
 
         # send the process to the queue
         unique_id = self.queue.add_task(
