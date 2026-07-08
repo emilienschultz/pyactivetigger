@@ -2,8 +2,10 @@ import logging
 
 from fastapi import APIRouter, Body
 from pydantic import BaseModel, ConfigDict, Json
-from task_manager.tasks.hello_world import hello_world_task
+from task_manager.tasks.hello_world_task import hello_world_task
+from task_manager.tasks.test_data_model_task import test_data_model_task
 
+from activetigger.datamodels import ChangeEmailModel
 from activetigger.tasks import all_callbacks
 
 
@@ -54,4 +56,22 @@ def task_hello_world(
     """
     logger.info(f"create task name {name}")
     hello_world_task.s(name).apply_async()
+    return True
+
+
+
+
+@router.post(
+    "/tasks/test_data_model",
+    # TODO: add a Task API key verification
+    # dependencies=[Depends(verified_user)],
+)
+def task_test_data_model(
+    email: str
+) :
+    """
+    test task to show how to execute task from orchestrator
+    """
+    logger.info("create task name test data model")
+    test_data_model_task.s(ChangeEmailModel(email=email, password="changeme").model_dump()).apply_async()
     return True
