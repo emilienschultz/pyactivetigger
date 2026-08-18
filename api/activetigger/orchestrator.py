@@ -381,6 +381,7 @@ class Orchestrator:
             ]
             for p in self.projects
         }
+        # TODO: running/queued tasks in task manager
 
         # running processes in the queue
         queue = {
@@ -839,10 +840,10 @@ class Orchestrator:
         return toy_datasets
 
 
-orchestrator = None
+orchestrator:Orchestrator|None = None
 
 
-def get_orchestrator():
+def get_orchestrator()->Orchestrator:
     global orchestrator
     if orchestrator is None:
         orchestrator = Orchestrator()

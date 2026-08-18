@@ -1,8 +1,9 @@
+
 import shutil
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import pandas as pd
-from activetigger.datamodels import ProjectBaseModel
+from activetigger.datamodels import ProjectBaseModel, ProjectModel
 from activetigger.functions import concat_text_columns, slugify
 from celery import Task
 from celery.utils.log import get_task_logger
@@ -12,15 +13,16 @@ from task_manager.auto_callback_task import AutoCallbackTask, QueueName
 from task_manager.celery import celery_app
 
 
-# tuple[ProjectModel, pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None]:
+# Return type must be a dict, a BaseModel would not be serialized by Celery
 class CreateProjectTaskResult(TypedDict):
-    project_slug: str
-    train_path: str | None
-    test_path: str | None
-    valid_path: str | None
+    username: str
+    project: dict[str, Any] # Dumped Project model
+    import_trainset_path: str | None
+    import_testset_path: str | None
+    import_validset_path: str | None
 
 
-# input must be serializable it can't be BaseModel
+# input can be a BaseModel if pydantic is enabled in the Task decorator
 class CreateProjectTaskInput(BaseModel):
     username: str
     project_slug: str
@@ -44,7 +46,8 @@ class CreateProjectTask(AutoCallbackTask):
         Define an internal and external index
         return the project model and the train/valid/test datasets to import in the database
         """
-        logger = get_task_logger(CreateProjectTask.name)
+        # TODO us task logger
+        # logger = get_task_logger(CreateProjectTask.name)
         print(f"Start queue project {props.project_slug} for {props.username}")
         # check if the directory already exists + file (should with the data)
         if props.params.dir is None or not props.params.dir.exists():
@@ -295,26 +298,34 @@ class CreateProjectTask(AutoCallbackTask):
                 props.params.dir.joinpath(props.train_file), index=True
             )
 
-        # save parameters (without the data)
-        project = props.params.model_dump()
 
         # add elements for the parameters
-        project["project_slug"] = props.project_slug
-        project["all_columns"] = all_columns
-        project["n_total"] = n_total
+        props.params.n_total= n_total
+        project_to_create = ProjectModel(
+            project_slug=props.project_slug,
+            all_columns=all_columns,
+            **props.params.model_dump()
+        )
+        
 
         # schemes/labels to import (in the main process)
-        import_trainset = None
-        import_testset = None
-        import_validset = None
+        import_trainset_path = None
+        import_testset_path = None
+        import_validset_path = None
         if len(props.params.cols_label) > 0 and trainset is not None:
             import_trainset = trainset[props.params.cols_label].dropna(how="all")
+            # write panda file on disk
+            import_trainset_path = props.params.dir.joinpath("import_train.parquet")
+            import_trainset.to_parquet(import_trainset_path, index=True)
             if testset is not None and not props.params.clear_test:
                 import_testset = testset[props.params.cols_label].dropna(how="all")
+                import_testset_path = props.params.dir.joinpath("import_test.parquet")
+                import_testset.to_parquet(import_testset_path, index=True)
             if validset is not None and not props.params.clear_valid:
                 import_validset = validset[props.params.cols_label].dropna(how="all")
+                import_validset_path = props.params.dir.joinpath("import_valid.parquet")
+                import_validset.to_parquet(import_validset_path, index=True)
 
-        # TODO write panda file on disk
 
         # delete the initial file
         if props.params.filename is not None:
@@ -323,14 +334,13 @@ class CreateProjectTask(AutoCallbackTask):
             except OSError as e:
                 print(f"Warning: could not delete uploaded file: {e}")
 
-        print("Project created")
-
-        result: CreateProjectTaskResult = {
-            "project_slug": props.project_slug,
-            "train_path": "todo",
-            "test_path": "todo",
-            "valid_path": "todo",
-        }
+        result= CreateProjectTaskResult(
+            username= props.username,
+            project= project_to_create.model_dump(mode='json'),
+            import_trainset_path= str(import_trainset_path) if import_trainset_path else None,
+            import_testset_path= str(import_testset_path) if import_testset_path else None,
+            import_validset_path= str(import_validset_path) if import_validset_path else None,
+        )
         return result
 
 

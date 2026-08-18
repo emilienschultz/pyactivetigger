@@ -389,7 +389,7 @@ class Project:
         # add the dedicated directory
         params.dir = path.joinpath(self.project_slug)
 
-        # new way to create task project
+        # start a create project task
         create_project_task.s(CreateProjectTaskInput(
                 project_slug=self.project_slug,
                 params=params,
@@ -399,38 +399,9 @@ class Project:
                 valid_file=config.valid_file,
                 test_file=config.test_file,
                 features_file=config.features_file,
-                random_seed=config.random_seed,).model_dump()).apply_async()
-
-
-        # send the process to the queue
-        unique_id = self.queue.add_task(
-            "create_project",
-            self.project_slug,
-            CreateProject(
-                self.project_slug,
-                params,
-                username,
-                data_all=config.data_all,
-                train_file=config.train_file,
-                valid_file=config.valid_file,
-                test_file=config.test_file,
-                features_file=config.features_file,
-                random_seed=config.random_seed,
-            ),
-            queue="cpu",
-        )
-
-        # Update the register
-        self.computing.append(
-            ProjectCreatingModel(
-                username=username,
-                project_slug=self.project_slug,
-                unique_id=unique_id,
-                time=datetime.now(timezone.utc),
-                kind="create_project",
-                status="training",
-            )
-        )
+                random_seed=config.random_seed,)
+                # it's mandatory to dump the model to a JSON compatible dict
+                .model_dump(mode='json')).apply_async()
 
     def start_project_creation_imagexp(
         self, params: ProjectBaseModel, username: str, path: Path
