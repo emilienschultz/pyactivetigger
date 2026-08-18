@@ -48,3 +48,4 @@ Current Problems to solve:
 Next ones:
 
 - write data in common data folder
+- dynamically change number of worker
