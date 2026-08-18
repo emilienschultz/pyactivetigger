@@ -6,7 +6,8 @@ import pandas as pd
 from activetigger.datamodels import ProjectBaseModel, ProjectModel
 from activetigger.functions import concat_text_columns, slugify
 from celery import Task
-from celery.utils.log import get_task_logger
+
+# from celery.utils.log import get_task_logger
 from pydantic import BaseModel
 
 from task_manager.auto_callback_task import AutoCallbackTask, QueueName

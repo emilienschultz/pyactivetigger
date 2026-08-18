@@ -2,7 +2,12 @@ from enum import StrEnum
 
 from celery import Task
 
-from task_manager.utils import TaskResultForCallback, task_success_callback
+from task_manager.utils import (
+    TaskFailureReportForCallback,
+    TaskResultForCallback,
+    task_failure_callback,
+    task_success_callback,
+)
 
 
 # TODO: should we declare queue in celery_app directly?
@@ -23,3 +28,13 @@ class AutoCallbackTask(Task):
         results:TaskResultForCallback = {'results':retval, 'task_name': self.name}  # ty:ignore[invalid-argument-type]
         task_success_callback(task_id, results)
         return super().on_success(retval, task_id, args, kwargs)
+    
+    # Callback to orchestrator on task failure
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        report:TaskFailureReportForCallback = {
+            'exception': str(exc),
+            'task_args': args,
+            'task_kwargs': kwargs,
+            'task_name': self.name} # ty:ignore[invalid-argument-type]
+        task_failure_callback(task_id, report)
+        return super().on_failure(exc, task_id, args, kwargs, einfo)

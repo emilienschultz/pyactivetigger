@@ -16,6 +16,12 @@ class TaskCallback(ABC):
         """Callback called by the orchestrator once the task succeeds."""
         raise NotImplementedError
     
+    @classmethod
+    @abstractmethod
+    def on_failure(cls, task_id:str, task_report: Any) -> Any:
+        """Callback called by the orchestrator if the task fails."""
+        raise NotImplementedError
+    
     
 # discover all TaskCallback implementations to collect on_complete methods
 def discover_task_callbacks(directory_path: str):

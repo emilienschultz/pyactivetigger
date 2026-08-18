@@ -39,13 +39,8 @@ To specify complex input/results you can use Pydantic data models but with two c
 
 ## Notes
 
-Current Problems to solve:
+TODO:
 
-1. share data model between tasks and orchestrator (multi-package with common package? remove workspace ?)
-   => test_data_mode_task shows taht importing from activetigger.datamodels into task_manager works
-2. make createProject Input model serializable: POSIX path are not.
-
-Next ones:
-
-- write data in common data folder
+- task monitoring
+- add common data folder configurable to allow distant task manager with mounting point ?
 - dynamically change number of worker

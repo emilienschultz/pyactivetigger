@@ -1,7 +1,14 @@
+from typing import cast
+
 import pandas as pd
 
 # use task specification to ensure name and return are in sync with task_manager
-from task_manager.tasks.create_project_task import CreateProjectTask, CreateProjectTaskResult
+from task_manager.tasks.create_project_task import (
+    CreateProjectTask,
+    CreateProjectTaskInput,
+    CreateProjectTaskResult,
+)
+from task_manager.utils import TaskFailureReportForCallback
 
 from activetigger.datamodels import ProjectModel
 from activetigger.orchestrator import get_orchestrator
@@ -39,4 +46,18 @@ class CreateProjectCallback(TaskCallback):
                 )
         except KeyError:
             raise Exception(f"Project {project.project_slug} not listed in orchestrator, we can't finish creation process")
+
+    # the on_failure method will be executed when a task failes
+    # it will be executed from the orchestrator allowing using its dependencies (db and all)
+    @classmethod
+    def on_failure(cls, task_id:str, task_report:TaskFailureReportForCallback):
+        print(f"Error on Create Project task {task_id} in orchestrator {task_report}")
+        # cast first args as Task Input type
+        orchestrator = get_orchestrator()
+        try:
+            task_input = CreateProjectTaskInput(**task_report['task_args'][0])
+            project_manager = orchestrator.project_creation_ongoing[task_input.project_slug]
+            project_manager.status = 'error'
+        except KeyError:
+            raise Exception(f"Project {task_input.project_slug} not listed in orchestrator, we can't finish creation process")
 

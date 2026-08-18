@@ -9,12 +9,16 @@ from activetigger.datamodels import ChangeEmailModel
 from activetigger.tasks import all_callbacks
 
 
-class CallbackModel(BaseModel):
+class GenericCallbackModel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
     task_id: str
-    results: any  # ty:ignore[invalid-type-form]
     task_name: str
+
+class SuccessCallbackModel(GenericCallbackModel):
+    results: any  # ty:ignore[invalid-type-form]
+
+class FailureCallbackModel(GenericCallbackModel):
+    report: any  # ty:ignore[invalid-type-form]
 
 
 router = APIRouter(tags=["tasks"])
@@ -26,19 +30,39 @@ logger = logging.getLogger("activetigger.fastapi.tasks")
     # TODO: add a Task API key verification
     # dependencies=[Depends(verified_user)],
 )
-def task_callback(
-   task_result: CallbackModel = Body(...)
+def task_success_callback(
+   body: SuccessCallbackModel = Body(...)
 ) :
     """
     Task success callback 
     """
-    logger.info(f"task {task_result.task_id} succeed with result {task_result.results} {task_result.task_name}")
+    logger.info(f"task {body.task_id} succeed with result {body.results} {body.task_name}")
     
     # check if a completion callback is available
-    callback = all_callbacks.task_callbacks[task_result.task_name]
+    callback = all_callbacks.task_callbacks[body.task_name]
     if callback:
-        logger.info(f"execute callback for task {task_result.task_name} {task_result.task_id}")
-        callback(task_result.task_id, task_result.results)
+        logger.info(f"execute callback for task {body.task_name} {body.task_id}")
+        callback.on_complete(body.task_id, body.results)
+    return True
+
+@router.post(
+    "/tasks/failed",
+    # TODO: add a Task API key verification
+    # dependencies=[Depends(verified_user)],
+)
+def task_failure_callback(
+   body: FailureCallbackModel = Body(...)
+) :
+    """
+    Task success callback 
+    """
+    logger.info(f"task {body.task_id} failed with report {body.report} {body.task_name}")
+    
+    # check if a completion callback is available
+    callback = all_callbacks.task_callbacks[body.task_name]
+    if callback:
+        logger.info(f"execute callback for task {body.task_name} {body.task_id}")
+        callback.on_failure(body.task_id, body.report)
     return True
 
 
