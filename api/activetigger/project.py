@@ -82,7 +82,6 @@ from activetigger.queue_manager import Queue
 from activetigger.quickmodels import QuickModels
 from activetigger.schemes import Schemes
 from activetigger.tasks.add_evalset import AddEvalSet, AddEvalSetImage
-from activetigger.tasks.create_project import CreateProject, CreateProjectImagexp
 from activetigger.tasks.extend_features import ExtendFeatures
 from activetigger.tasks.generate_call import GenerateCall
 from activetigger.tasks.update_datasets import UpdateDatasets
@@ -391,6 +390,7 @@ class Project:
 
         # start a create project task
         create_project_task.s(CreateProjectTaskInput(
+                image_project=False,
                 project_slug=self.project_slug,
                 params=params,
                 username=username,
@@ -413,33 +413,20 @@ class Project:
         self.status = "creating"
         params.dir = path.joinpath(self.project_slug)
 
-        unique_id = self.queue.add_task(
-            "create_project",
-            self.project_slug,
-            CreateProjectImagexp(
-                self.project_slug,
-                params,
-                username,
+        # start a create project task
+        create_project_task.s(CreateProjectTaskInput(
+                image_project=True,
+                project_slug=self.project_slug,
+                params=params,
+                username=username,
                 data_all=config.data_all,
                 train_file=config.train_file,
                 valid_file=config.valid_file,
                 test_file=config.test_file,
                 features_file=config.features_file,
-                random_seed=config.random_seed,
-            ),
-            queue="cpu",
-        )
-
-        self.computing.append(
-            ProjectCreatingModel(
-                username=username,
-                project_slug=self.project_slug,
-                unique_id=unique_id,
-                time=datetime.now(timezone.utc),
-                kind="create_project",
-                status="training",
-            )
-        )
+                random_seed=config.random_seed,)
+                # it's mandatory to dump the model to a JSON compatible dict
+                .model_dump(mode='json')).apply_async()
 
     def finish_project_creation(
         self,
@@ -2592,10 +2579,6 @@ class Project:
                         self.params.dir.joinpath(f"gen_{e.unique_id}.jsonl")
                     )
 
-                # specific case for project creation ; delete the project
-                if e.kind == "create_project":
-                    print("Error in project creation")
-                    self.status = "error"
 
                 # a failed extension leaves a features file with the
                 # pre-eval-set shape; reset to the safe empty state
@@ -2609,14 +2592,7 @@ class Project:
             try:
                 results = process.future.result()
                 match e.kind:
-                    case "create_project":
-                        e = cast(ProjectCreatingModel, e)
-                        if results is None:
-                            print("No result from project creation")
-                            raise Exception("No result from project creation")
-                        self.finish_project_creation(
-                            e.username, results[0], results[1], results[2], results[3]
-                        )
+
                     case "update_datasets":
                         e = cast(UpdateComputing, e)
                         self.db_manager.projects_service.update_project(
@@ -2786,8 +2762,6 @@ class Project:
                 print(f"Error in {e.kind} : {ex}")
                 self.errors.add(f"Error in {e.kind} : {str(ex)}")
                 match e.kind:
-                    case "create_project":
-                        self.status = "error"
                     case "train_bert":
                         bert_task = cast(LMComputing, e)
                         self.db_manager.language_models_service.delete_model(

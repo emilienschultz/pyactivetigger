@@ -1,5 +1,4 @@
 import os
-from typing import Callable
 
 from activetigger.tasks.task_callback import TaskCallback, discover_task_callbacks
 

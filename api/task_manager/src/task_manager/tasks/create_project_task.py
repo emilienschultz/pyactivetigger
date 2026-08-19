@@ -1,10 +1,23 @@
-
+import csv
 import shutil
+import sys
+import uuid
+import zipfile
+from pathlib import Path
 from typing import Any, TypedDict
 
 import pandas as pd
 from activetigger.datamodels import ProjectBaseModel, ProjectModel
 from activetigger.functions import concat_text_columns, slugify
+from activetigger.functions_image import (
+    ALLOWED_EXT as IMAGE_ALLOWED_EXT,
+)
+from activetigger.functions_image import (
+    MAX_IMAGE_BYTES,
+    MAX_ZIP_BYTES,
+    filter_readable_images,
+    generate_thumbnail,
+)
 from celery import Task
 
 # from celery.utils.log import get_task_logger
@@ -13,6 +26,8 @@ from pydantic import BaseModel
 from task_manager.auto_callback_task import AutoCallbackTask, QueueName
 from task_manager.celery import celery_app
 
+# TODO: is that necessary? we don't use csv lib in this code
+csv.field_size_limit(sys.maxsize)
 
 # Return type must be a dict, a BaseModel would not be serialized by Celery
 class CreateProjectTaskResult(TypedDict):
@@ -25,6 +40,7 @@ class CreateProjectTaskResult(TypedDict):
 
 # input can be a BaseModel if pydantic is enabled in the Task decorator
 class CreateProjectTaskInput(BaseModel):
+    image_project: bool
     username: str
     project_slug: str
     params: ProjectBaseModel
@@ -41,7 +57,7 @@ class CreateProjectTask(AutoCallbackTask):
     name = "create project"
     queue = QueueName.CPU
 
-    def run(self: Task, props: CreateProjectTaskInput) -> CreateProjectTaskResult:
+    def create_project(self: Task, props: CreateProjectTaskInput) -> CreateProjectTaskResult:
         """
         Create the project with the given name and file
         Define an internal and external index
@@ -344,6 +360,244 @@ class CreateProjectTask(AutoCallbackTask):
         )
         return result
 
+    # TODO: refacto those two sibblings method by factoring code between image/normal project
+    def create_image_project(self: Task, props: CreateProjectTaskInput) -> CreateProjectTaskResult:
+        """
+        Experimental task for creating an "image" project.
+        Accepts a .zip upload containing png/jpg files and an optional metadata
+        csv/parquet. Builds data_all.parquet with id/path (+ metadata) columns.
+        Lives next to CreateProject to be easy to grep and eventually remove.
+        """
+
+        print(f"Start queue image project {props.project_slug} for {props.username}")
+
+        if props.params.dir is None or not props.params.dir.exists():
+            raise Exception("The directory does not exist and should")
+
+        if props.params.filename is None:
+            raise Exception("An image .zip archive must be uploaded for image projects")
+
+        zip_path = props.params.dir.joinpath(props.params.filename)
+        if not zip_path.exists() or not str(zip_path).lower().endswith(".zip"):
+            raise Exception("Image project expects a .zip archive upload")
+
+        # cap on zip size
+        if zip_path.stat().st_size > MAX_ZIP_BYTES:
+            raise Exception(f"Zip file too large (max {MAX_ZIP_BYTES // (1024 * 1024)} MB)")
+
+        # read central directory first, validate, then extract
+        images_dir = props.params.dir.joinpath("images")
+        images_dir.mkdir(parents=True, exist_ok=True)
+        thumbs_dir = images_dir.joinpath("thumbs")
+        thumbs_dir.mkdir(parents=True, exist_ok=True)
+
+        rows: list[dict] = []
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            infos = [i for i in zf.infolist() if not i.is_dir()]
+            image_infos = [
+                i
+                for i in infos
+                if Path(i.filename).suffix.lower() in IMAGE_ALLOWED_EXT
+                and not Path(i.filename).name.startswith("._")
+                and "__MACOSX" not in Path(i.filename).parts
+            ]
+            if len(image_infos) == 0:
+                raise Exception("Zip does not contain any .png/.jpg image")
+            for info in image_infos:
+                if info.file_size > MAX_IMAGE_BYTES:
+                    raise Exception(
+                        f"Image '{info.filename}' exceeds per-file cap of "
+                        f"{MAX_IMAGE_BYTES // (1024 * 1024)} MB"
+                    )
+
+            # optional metadata file in the zip
+            metadata_infos = [
+                i for i in infos if Path(i.filename).suffix.lower() in {".csv", ".parquet"}
+            ]
+
+            total_images = len(image_infos)
+            progress_file = props.params.dir.joinpath("creation_progress")
+            for idx, info in enumerate(image_infos, 1):
+                src_name = Path(info.filename).name
+                element_id = Path(info.filename).stem
+                target = images_dir.joinpath(src_name)
+                with zf.open(info) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                rows.append({"id": element_id, "path": str(target)})
+
+                # Precompute a 256px JPEG thumbnail keyed by the slugified id
+                # (id_internal). Failures on individual files are logged and
+                # skipped — the thumbnail route falls back to the original.
+                generate_thumbnail(target, thumbs_dir.joinpath(f"{slugify(element_id)}.jpg"))
+
+                # Write progress
+                progress_pct = round((idx / total_images) * 100, 1)
+                try:
+                    with open(progress_file, "w") as pf:
+                        pf.write(str(progress_pct))
+                except OSError:
+                    pass
+
+            # Clean up progress file
+            try:
+                progress_file.unlink()
+            except OSError:
+                pass
+
+            metadata_df = None
+            if metadata_infos:
+                meta_info = metadata_infos[0]
+                tmp_meta = props.params.dir.joinpath(Path(meta_info.filename).name)
+                with zf.open(meta_info) as src, open(tmp_meta, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                try:
+                    if str(tmp_meta).endswith(".csv"):
+                        metadata_df = pd.read_csv(tmp_meta)
+                    else:
+                        metadata_df = pd.read_parquet(tmp_meta)
+                except Exception as e:
+                    print(f"Could not read metadata file: {e}")
+                    metadata_df = None
+                try:
+                    tmp_meta.unlink()
+                except OSError:
+                    pass
+
+        # Drop unreadable / corrupt images now, so the train pool only
+        # contains images the rest of the pipeline can actually load.
+        if rows:
+            readable_flags = filter_readable_images([r["path"] for r in rows])
+            n_dropped = sum(1 for f in readable_flags if not f)
+            if n_dropped > 0:
+                kept = []
+                for row, ok in zip(rows, readable_flags):
+                    if ok:
+                        kept.append(row)
+                    else:
+                        try:
+                            Path(row["path"]).unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                rows = kept
+                print(f"Dropped {n_dropped} unreadable/corrupt images", flush=True)
+        if not rows:
+            raise Exception("Zip contained no readable images after cleaning")
+
+        content = pd.DataFrame(rows)
+        if metadata_df is not None and len(metadata_df) > 0:
+            # match on filename stem; first column of metadata is assumed to be the id
+            id_col = metadata_df.columns[0]
+            metadata_df[id_col] = metadata_df[id_col].astype(str).map(lambda s: Path(s).stem)
+            metadata_df = metadata_df.rename(columns={id_col: "id"})
+            content = content.merge(metadata_df, on="id", how="left")
+
+        # internal / external indexing to match CreateProject expectations
+        content["id_external"] = content["id"].astype(str)
+        content["id_internal"] = content["id_external"].apply(slugify)
+        if content["id_internal"].nunique() != len(content):
+            content["id_internal"] = [str(i) for i in range(len(content))]
+        content.set_index("id_internal", inplace=True)
+        # the rest of the pipeline expects a "text" column
+        content["text"] = content["path"].astype(str)
+
+        all_columns = list(content.columns)
+        n_total = len(content)
+
+        # simple split: everything is train by default; honor n_test / n_valid if set
+        n_test = max(0, int(props.params.n_test or 0))
+        n_valid = max(0, int(props.params.n_valid or 0))
+        n_train = int(props.params.n_train or (n_total - n_test - n_valid))
+        n_train = max(0, min(n_train, n_total - n_test - n_valid))
+
+        # Eval images are duplicated into images/eval_{dataset}/ so the user
+        # can drop the test/valid set later (rmtree of the subdir) without
+        # touching the originals that the train pool still references.
+        def _copy_eval_images(sampled: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
+            eval_dir = images_dir.joinpath(f"eval_{dataset_name}")
+            eval_dir.mkdir(parents=True, exist_ok=True)
+            new_paths: list[str] = []
+            for orig in sampled["path"].astype(str):
+                src = Path(orig)
+                dst = eval_dir.joinpath(src.name)
+                if dst.exists():
+                    dst = eval_dir.joinpath(f"{uuid.uuid4().hex[:6]}_{src.name}")
+                shutil.copy2(src, dst)
+                new_paths.append(str(dst))
+            out = sampled.copy()
+            out["path"] = new_paths
+            out["text"] = new_paths
+            return out
+
+        testset = None
+        validset = None
+        rows_test: list = []
+        rows_valid: list = []
+        props.params.test = False
+        props.params.valid = False
+        if n_test + n_valid > 0:
+            draw = content.sample(n_test + n_valid, random_state=props.random_seed)
+            if n_test > 0:
+                testset = draw.sample(n_test, random_state=props.random_seed)
+                rows_test = list(testset.index)
+                testset = _copy_eval_images(testset, "test")
+                testset.to_parquet(props.params.dir.joinpath(props.test_file), index=True)
+                props.params.test = True
+            if n_valid > 0:
+                validset = draw.drop(index=rows_test) if rows_test else draw
+                validset = validset.sample(n_valid, random_state=props.random_seed)
+                rows_valid = list(validset.index)
+                validset = _copy_eval_images(validset, "valid")
+                validset.to_parquet(props.params.dir.joinpath(props.valid_file), index=True)
+                props.params.valid = True
+
+        remaining = content.drop(rows_test + rows_valid, errors="ignore")
+        trainset = (
+            remaining.sample(min(n_train, len(remaining)), random_state=props.random_seed)
+            if n_train > 0
+            else remaining
+        )
+
+        # persist data_all
+        content.to_parquet(props.params.dir.joinpath(props.data_all), index=True)
+        # persist train
+        trainset[["id_external", "text"]].to_parquet(
+            props.params.dir.joinpath(props.train_file), index=True
+        )
+
+        # NB: image embeddings are NOT computed here. They can be computed
+        # on-demand later via the features API.
+
+        # make sure cols_text has the expected shape for downstream code
+        props.params.cols_text = ["text"]
+        props.params.col_id = "id"
+
+
+
+        # add elements for the parameters
+        props.params.n_total= n_total
+        project_to_create = ProjectModel(
+            project_slug=props.project_slug,
+            all_columns=all_columns,
+            **props.params.model_dump()
+        )
+        
+
+        # delete uploaded zip
+        try:
+            zip_path.unlink()
+        except OSError as e:
+            print(f"Warning: could not delete uploaded zip: {e}")
+
+    
+
+        result= CreateProjectTaskResult(
+            username= props.username,
+            project= project_to_create.model_dump(mode='json'),
+            import_trainset_path= None,
+            import_testset_path= None,
+            import_validset_path= None,
+        )
+        return result
 
 # Task registration
 @celery_app.task(
@@ -354,4 +608,7 @@ class CreateProjectTask(AutoCallbackTask):
     pydantic=True,
 )
 def create_project_task(self, props: CreateProjectTaskInput):
-    return CreateProjectTask.run(self=self, props=props)
+    if props.image_project:
+        return CreateProjectTask.create_image_project(self=self, props=props)
+    else:
+        return CreateProjectTask.create_project(self=self, props=props)
