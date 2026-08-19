@@ -1,3 +1,4 @@
+from os import unlink
 from typing import cast
 
 import pandas as pd
@@ -44,10 +45,19 @@ class CreateProjectCallback(TaskCallback):
                 testset_import,
                 validset_import
                 )
+            # clean filesystem
+            if task_result['import_trainset_path']:
+                unlink(task_result['import_trainset_path'])
+            if task_result['import_testset_path']:
+                unlink(task_result['import_testset_path'])
+            if task_result['import_validset_path']:
+                unlink(task_result['import_validset_path'])
+
         except KeyError:
             raise Exception(f"Project {project.project_slug} not listed in orchestrator, we can't finish creation process")
+        
 
-    # the on_failure method will be executed when a task failes
+    # the on_failure method will be executed when a task fails
     # it will be executed from the orchestrator allowing using its dependencies (db and all)
     @classmethod
     def on_failure(cls, task_id:str, task_report:TaskFailureReportForCallback):
@@ -58,6 +68,7 @@ class CreateProjectCallback(TaskCallback):
             task_input = CreateProjectTaskInput(**task_report['task_args'][0])
             project_manager = orchestrator.project_creation_ongoing[task_input.project_slug]
             project_manager.status = 'error'
+            project_manager.errors.add(f"Error for process {CreateProjectTask.name} : {task_report['exception']}")
         except KeyError:
             raise Exception(f"Project {task_input.project_slug} not listed in orchestrator, we can't finish creation process")
 
