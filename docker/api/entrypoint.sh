@@ -74,6 +74,14 @@ uv run watchmedo auto-restart \
     --recursive \
     -- uv run celery-worker-cpu &
 
+if [ "$GPU" = "true" ]; then
+  uv run watchmedo auto-restart \
+    --directory="./task_manager/src/task_manager/" \
+    --pattern="*.py" \
+    --recursive \
+    -- uv run celery-worker-gpu &
+fi
+
 # Launch the server
 echo "Launching API on port $API_PORT..."
 

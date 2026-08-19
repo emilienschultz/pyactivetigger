@@ -8,6 +8,10 @@ import pandas as pd
 import pyarrow.parquet as pq
 import regex
 from pandas import DataFrame, Series
+from task_manager.tasks.compute_bert_embeddings_task import (
+    ComputeBertEmbeddingsTaskInput,
+    compute_bert_embeddings,
+)
 
 from activetigger.config import config
 from activetigger.data import Data
@@ -19,7 +23,6 @@ from activetigger.datamodels import (
 from activetigger.db.projects import ProjectsService
 from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.queue_manager import Queue
-from activetigger.tasks.compute_bert_embeddings import ComputeBertEmbeddings
 from activetigger.tasks.compute_clip_imagexp import ComputeClipImagexp
 from activetigger.tasks.compute_dfm import ComputeDfm
 from activetigger.tasks.compute_fasttext import ComputeFasttext
@@ -750,6 +753,11 @@ class Features:
         # features with queue
         unique_id = None
 
+        # serialize df on disk for transmission to Celery task
+        # TODO: is path_features the right directory where to write that?
+        texts_path = self.path_features.joinpath('texts.pkl')
+        df.pickle(self.path_features.joinpath('texts.pkl'))
+
         if kind == "sentence-embeddings":
             model = self.__sbert_choose_model(parameters)
 
@@ -793,32 +801,20 @@ class Features:
 
             max_length_tokens = int(parameters.get("max_length_tokens", 512))
             batch_size = int(parameters.get("batch_size", 32))
-            model_path = self.languagemodels.path.joinpath(model_name)
-
-            unique_id = self.queue.add_task(
-                "feature",
-                self.project_slug,
-                ComputeBertEmbeddings(
-                    texts=df,
-                    path_process=self.path_all.parent,
-                    model_path=model_path,
-                    pooling=pooling,
-                    batch_size=batch_size,
-                    max_tokens=max_length_tokens,
-                ),
-                queue="gpu",
-            )
-
-            parameters = {
-                "model": model_name,
-                "pooling": pooling,
-                "name": name,
-                "kind": kind,
-                "username": username,
-                "max_length_tokens": max_length_tokens,
-                "batch_size": batch_size,
-            }
-
+            # queue celery task
+            compute_bert_embeddings.s(ComputeBertEmbeddingsTaskInput(
+                feature_name=name,
+                username = username,
+                project_slug=self.project_slug,
+                texts_path= texts_path,
+                path_process=self.path_all.parent,
+                model_name=model_name,
+                model_dir=self.languagemodels.path,
+                pooling=pooling,
+                batch_size=batch_size,
+                max_tokens=max_length_tokens,
+            )).apply_async()
+            return None
         if kind == "image-embeddings":
             # Resolve UI label -> (open_clip model, pretrained tag)
             ui_label = parameters.get("model") or DEFAULT_IMAGE_EMBEDDING_MODEL_IMAGEXP

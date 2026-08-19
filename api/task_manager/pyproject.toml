@@ -15,7 +15,7 @@ dependencies = [
 
 [project.scripts]
 celery-worker-cpu = "task_manager.worker:start_cpu_worker_pool"
-
+celery-worker-gpu = "task_manager.worker:start_gpu_worker_pool"
 
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]

@@ -56,6 +56,8 @@ Monitoring events could remove the need for the API task callback routes. But do
 
 TODO:
 
-- task monitoring
+- task monitoring through signals
+- task interuption by user
+- transform ComputeFeaturesFromSpecs as a celery group of sub tasks
 - add common data folder configurable to allow distant task manager with mounting point ?
 - dynamically change number of worker

@@ -10,7 +10,7 @@ from task_manager.celery import celery_app
 
 def start_cpu_worker_pool():
     """
-    Start a worker for the CPU queue
+    Start worker.s for the CPU queue
     """
     args = [
         "worker",
@@ -23,18 +23,17 @@ def start_cpu_worker_pool():
     celery_app.worker_main(args)
 
 
-# TODO
-# def runGpuWorker():
-#     """
-#     Start a worker for the GPU queue
-#     """
-#     args = [
-#         "worker",
-#         f"--loglevel={worker_loglevel}",
-#         f"--concurrency={gpu_worker_concurrency}",
-#         "-Psolo",
-#         "--queues=GPU",
-#         "--hostname=worker_gpu@%h",
-#         # "--purge",
-#     ]
-#     celery.worker_main(args)
+def start_gpu_worker_pool():
+    """
+    Start worker.s for the GPU queue
+    """
+    args = [
+        "worker",
+        f"--loglevel={config.worker_loglevel}",
+        f"--concurrency={config.gpu_worker_concurrency}",
+        "-Psolo",
+        f"--queues={QueueName.GPU}",
+        "--hostname=worker_gpu@%h",
+        # "--purge",
+    ]
+    celery_app.worker_main(args)
