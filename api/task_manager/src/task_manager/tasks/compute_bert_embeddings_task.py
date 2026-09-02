@@ -40,7 +40,7 @@ class ComputeBertEmbeddingsTaskParameters(TypedDict):
 class ComputeBertEmbeddingsTaskResult(TypedDict):
     username: str
     project_slug: str
-    embeddings_path: Path
+    embeddings_path: str
     parameters: ComputeBertEmbeddingsTaskParameters
 
 
@@ -65,8 +65,24 @@ class ComputeBertEmbeddingsTask(AutoCallbackTask):
     name = "compute bert embeddings"
     # GPU task unless CPU_only mode
     queue = QueueName.GPU if os.environ.get("GPU") == "true" else QueueName.CPU
+    path_progress: Path | None
+
+    def log_progress(self, progress:float, project_slug:str):
+        self.update_state(state="PROGRESS", meta={'status':"computing", 'progress':0})
+        print(f"{project_slug} Bert Embeddings {progress}")
+        if self.path_progress:
+            with open(self.path_progress, "w") as f:
+                f.write(str(round(progress, 1)))
+        #  TODO: add custom progress event in live monitoring
+        # self.send_event(
+        #     "task-progress",
+        #     **meta
+        # )
 
     def compute_bert_embeddings(self, props:ComputeBertEmbeddingsTaskInput) -> ComputeBertEmbeddingsTaskResult:
+
+        self.path_progress = props.path_progress if props.path_progress else  props.path_process.joinpath(self.request.id)
+        
         # load texts
         texts = pd.read_pickle(props.texts_path)
         model_path = props.model_dir.joinpath(props.model_name)
@@ -100,7 +116,7 @@ class ComputeBertEmbeddingsTask(AutoCallbackTask):
         max_length = int(min(props.max_tokens, model_max))
 
         try:
-            self.update_state(state="PROGRESS", meta={'status':"computing", 'progress':0})
+            self.log_progress(0, props.project_slug)
             embeddings: list[np.ndarray] = []
             total_batches = math.ceil(len(texts) / props.batch_size)
             for i, start in enumerate(range(0, len(texts), props.batch_size), 1):
@@ -133,16 +149,10 @@ class ComputeBertEmbeddingsTask(AutoCallbackTask):
                 embeddings.append(pooled.cpu().numpy())
 
                 progress_percent = (i / total_batches) * 100
-                meta={
-                    'status':"computing",
-                    'progress':round(progress_percent, 1)}
-                self.update_state(state="PROGRESS", meta=meta)
-                #  TODO: add custom progress event in live monitoring
-                # self.send_event(
-                #     "task-progress",
-                #     **meta
-                # )
-                print(progress_percent)
+                
+                self.log_progress(round(progress_percent, 1), props.project_slug)
+                
+                
 
             stacked = np.vstack(embeddings)
             emb = pd.DataFrame(
@@ -167,7 +177,7 @@ class ComputeBertEmbeddingsTask(AutoCallbackTask):
             return {
                 'project_slug': props.project_slug,
                 'username': props.username,
-                'embeddings_path': embeddings_path,
+                'embeddings_path': str(embeddings_path),
                 'parameters': parameters
             }
 
@@ -190,5 +200,5 @@ class ComputeBertEmbeddingsTask(AutoCallbackTask):
     pydantic=True,
 )
 def compute_bert_embeddings(self, props: ComputeBertEmbeddingsTaskInput):
-    return ComputeBertEmbeddingsTask.compute_bert_embeddings(self=self, props=props)
+    return self.compute_bert_embeddings(props=props)
  

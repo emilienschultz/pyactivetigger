@@ -166,6 +166,7 @@ class ComputeFeaturesFromSpecs(BaseTask):
                     "bert-embeddings spec is missing 'model_path' "
                     "(caller must resolve it before invoking the task)"
                 )
+            # We can't use taskmanager here till all subtask are ported to taskmanager to be able to uuse a chord
             task = ComputeBertEmbeddings(
                 texts=data,
                 path_process=self.path_process,

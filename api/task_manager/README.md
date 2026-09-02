@@ -58,6 +58,7 @@ TODO:
 
 - task monitoring through signals
 - task interuption by user
+- type issue in orchestrator callback
 - transform ComputeFeaturesFromSpecs as a celery group of sub tasks
 - add common data folder configurable to allow distant task manager with mounting point ?
 - dynamically change number of worker

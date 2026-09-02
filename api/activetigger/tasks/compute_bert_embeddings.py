@@ -19,6 +19,7 @@ from activetigger.functions import get_device, release_device_memory
 from activetigger.tasks.base_task import BaseTask
 
 
+# TODO: deprecated task to remove once compute_feaeture_from_specs has been refacto with taskmanager
 class ComputeBertEmbeddings(BaseTask):
     """
     Compute embeddings from a fine-tuned BERT model saved by `train_bert.py`.

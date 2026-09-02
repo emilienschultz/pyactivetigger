@@ -10,9 +10,7 @@ from task_manager.tasks.compute_bert_embeddings_task import (
 )
 from task_manager.utils import TaskFailureReportForCallback
 
-from activetigger.datamodels import ProjectModel
 from activetigger.orchestrator import get_orchestrator
-from activetigger.tasks.compute_bert_embeddings import ComputeBertEmbeddings
 
 # ensure the callback definition is what we expect by using the TaskCallback abstraction
 from activetigger.tasks.task_callback import TaskCallback
@@ -27,16 +25,16 @@ class ComputeBertEmbeddingsCallback(TaskCallback):
     # it will be executed from the orchestrator allowing using its dependencies (db and all)
     @classmethod
     def on_complete(cls, task_id:str, task_result:ComputeBertEmbeddingsTaskResult):
-        print(f"Completion of Create Project task {task_id} in orchestrator {task_result}")
+        print(f"Completion of {cls.task_name} task {task_id} in orchestrator {task_result}")
         
         # load DataFrame from filesystem
         results = pd.read_parquet(task_result['embeddings_path'])
         
         orchestrator = get_orchestrator()
         try:
-            project_manager = orchestrator.project_creation_ongoing[task_result['project_slug']]
+            project_manager = orchestrator.projects[task_result['project_slug']]
             project_manager.features.add(
-                name="feature",
+                name=task_result['parameters']['name'],
                 kind="compute_bert_features",
                 username= task_result['username'],
                 parameters=cast(dict, task_result['parameters']),
@@ -49,12 +47,12 @@ class ComputeBertEmbeddingsCallback(TaskCallback):
     # it will be executed from the orchestrator allowing using its dependencies (db and all)
     @classmethod
     def on_failure(cls, task_id:str, task_report:TaskFailureReportForCallback):
-        print(f"Error on Create Project task {task_id} in orchestrator {task_report}")
+        print(f"Error on {cls.task_name} task {task_id} in orchestrator {task_report}")
         # cast first args as Task Input type
         orchestrator = get_orchestrator()
         try:
             task_input = ComputeBertEmbeddingsTaskInput(**task_report['task_args'][0])
-            project_manager = orchestrator.project_creation_ongoing[task_input.project_slug]
+            project_manager = orchestrator.projects[task_input.project_slug]
             project_manager.status = 'error'
             # TODO: this message is generic on any GPU task
             message = (
