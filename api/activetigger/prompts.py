@@ -418,6 +418,15 @@ class Prompts:
         router) wraps it in a FileResponse. Same format conversion
         convention as `QuickModels.export_prediction_file`.
         """
+        # prompt_id and dataset come from query params and are joined into
+        # filesystem paths below: only accept ids present in the prompts
+        # index and known dataset names, otherwise a crafted value could
+        # escape the project directory.
+        if prompt_id not in self._read().index:
+            raise ValueError(f"Prompt '{prompt_id}' not found")
+        if dataset not in SIMILARITY_DATASETS:
+            raise ValueError(f"Dataset must be one of {sorted(SIMILARITY_DATASETS)}")
+
         path = self.similarity_file(prompt_id, dataset)
         if not path.exists():
             raise FileNotFoundError(

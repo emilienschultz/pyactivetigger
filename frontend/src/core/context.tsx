@@ -60,8 +60,15 @@ const _useAppContext = () => {
 
   //store context in localstorage
   useEffect(() => {
-    localStorage.setItem(CONTEXT_LOCAL_STORAGE_KEY, JSON.stringify(appContext));
-    localStorage.setItem(DEVELOPMENT_MODE_STORAGE_KEY, String(appContext.developmentMode));
+    // currentProjection holds one node per element and can exceed the localStorage
+    // quota on large datasets; it is refetched from the API so it is not persisted.
+    const persistedContext = { ...appContext, currentProjection: undefined };
+    try {
+      localStorage.setItem(DEVELOPMENT_MODE_STORAGE_KEY, String(appContext.developmentMode));
+      localStorage.setItem(CONTEXT_LOCAL_STORAGE_KEY, JSON.stringify(persistedContext));
+    } catch (e) {
+      console.warn('Could not persist app context to localStorage', e);
+    }
   }, [appContext]);
 
   // Function to reset the context

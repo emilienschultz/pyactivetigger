@@ -66,32 +66,37 @@ class LanguageModels:
         self._loss_cache: dict[str, Tuple[float, dict | None]] = {}  # model_name -> (time, loss)
         self._loss_cache_interval: float = 5  # seconds
 
-        # load the list of models
-        if list_models is not None:
-            self.base_models = cast(
-                list[dict[str, Any]], pd.read_csv(list_models).to_dict(orient="records")
-            )
-        else:
-            self.base_models = [
-                {
-                    "name": "answerdotai/ModernBERT-base",
-                    "priority": 10,
-                    "comment": "",
-                    "language": "en",
-                },
-                {
-                    "name": "camembert/camembert-base",
-                    "priority": 0,
-                    "comment": "",
-                    "language": "fr",
-                },
-                {
-                    "name": "flaubert/flaubert_base_cased",
-                    "priority": 7,
-                    "comment": "",
-                    "language": "fr",
-                },
-            ]
+        # load the list of models; this runs inside Project.__init__, so a
+        # missing or malformed CSV must fall back to the bundled defaults
+        # instead of raising (which would break every project open)
+        self.base_models = [
+            {
+                "name": "answerdotai/ModernBERT-base",
+                "priority": 10,
+                "comment": "",
+                "language": "en",
+            },
+            {
+                "name": "camembert/camembert-base",
+                "priority": 0,
+                "comment": "",
+                "language": "fr",
+            },
+            {
+                "name": "flaubert/flaubert_base_cased",
+                "priority": 7,
+                "comment": "",
+                "language": "fr",
+            },
+        ]
+        if list_models is not None and Path(list_models).exists():
+            try:
+                df_models = pd.read_csv(list_models)
+                if "name" not in df_models.columns:
+                    raise ValueError("missing required column 'name'")
+                self.base_models = cast(list[dict[str, Any]], df_models.to_dict(orient="records"))
+            except Exception as ex:
+                print(f"Could not read models list {list_models}, using defaults: {ex}")
 
         # create the directory for models; exist_ok handles the TOCTOU race
         # when two concurrent project loads both pass the exists() check.
