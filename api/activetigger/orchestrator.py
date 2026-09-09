@@ -225,8 +225,12 @@ class Orchestrator:
         for p, project in list(self.projects.items()):
             try:
                 if (timer - project.starting_time) > project_lifetime:
-                    to_del.append(p)
-                    continue
+                    # Never evict a project with tasks in flight
+                    if project.computing:
+                        project.starting_time = timer
+                    else:
+                        to_del.append(p)
+                        continue
                 project.update_processes()
             except Exception as e:
                 print(f"Error while updating project {p}: {e}")
@@ -463,15 +467,20 @@ class Orchestrator:
         Manage the current projects in memory for an orchestrator
         """
         if len(self.projects) >= self.max_projects:
-            old_element = sorted(
-                [(p, self.projects[p].starting_time) for p in self.projects],
+            # only idle projects are evictable
+            idle_projects = sorted(
+                [
+                    (p, self.projects[p].starting_time)
+                    for p in self.projects
+                    if not self.projects[p].computing
+                ],
                 key=lambda x: x[1],
-            )[0]
+            )
             if (
-                old_element[1] < time.time() - 600
+                idle_projects and idle_projects[0][1] < time.time() - 600
             ):  # check if the project has a least ten minutes old to avoid destroying current projects
-                del self.projects[old_element[0]]
-                print(f"Delete project {old_element[0]} to gain memory")
+                del self.projects[idle_projects[0][0]]
+                print(f"Delete project {idle_projects[0][0]} to gain memory")
             else:
                 print("Too many projects in the current memory")
                 raise Exception(
