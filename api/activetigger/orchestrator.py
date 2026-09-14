@@ -26,6 +26,12 @@ from activetigger.config import config
 from activetigger.datamodels import DatasetModel, LMComputing, ProjectBaseModel, ServerStateModel
 from activetigger.db import DBException
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import (
+    AlreadyExistsError,
+    InvalidInputError,
+    NotFoundError,
+    ServerBusyError,
+)
 from activetigger.functions import (
     get_dir_size,
     get_gpu_memory_info,
@@ -181,7 +187,7 @@ class Orchestrator:
         """
         project_slug = self.check_project_name(project.project_name)
         if project_slug in ["new", "logs"]:
-            raise Exception("This project name is not valid - reserved word")
+            raise InvalidInputError("This project name is not valid - reserved word")
         # the upload endpoint sanitized the filename on disk; resolve the
         # client-provided name to the same form or the task won't find the file
         if project.filename is not None:
@@ -413,9 +419,9 @@ class Orchestrator:
         """
         project_slug = slugify(project_name)
         if self.exists(project_slug):
-            raise Exception("This project already exists")
+            raise AlreadyExistsError("This project already exists")
         if project_slug == "":
-            raise Exception("The project name is not valid - empty")
+            raise InvalidInputError("The project name is not valid - empty")
         return project_slug
 
     def create_access_token(self, data: dict, expires_min: int = 60) -> str:
@@ -483,7 +489,7 @@ class Orchestrator:
                 print(f"Delete project {idle_projects[0][0]} to gain memory")
             else:
                 print("Too many projects in the current memory")
-                raise Exception(
+                raise ServerBusyError(
                     "There is too many projects currently loaded in this server. Please wait"
                 )
 
@@ -492,7 +498,7 @@ class Orchestrator:
         Load project in server
         """
         if not self.exists(project_slug):
-            raise Exception("This project does not exist")
+            raise NotFoundError("This project does not exist")
 
         try:
             self.projects[project_slug] = Project(
@@ -569,7 +575,7 @@ class Orchestrator:
         # kill all the processes of the user for a specific project
         else:
             if project_slug not in self.projects:
-                raise Exception("This project is not loaded in memory")
+                raise NotFoundError("This project is not loaded in memory")
             processes_project = self.projects[project_slug].get_process(kind, username)
             for process in processes_project:
                 self.queue.kill(process.unique_id)
@@ -592,7 +598,7 @@ class Orchestrator:
 
         # test if the project exists
         if not self.exists(project_slug):
-            raise Exception("This project does not exist")
+            raise NotFoundError("This project does not exist")
 
         # load the project
         if project_slug in self.projects:
@@ -622,11 +628,11 @@ class Orchestrator:
         the target slug immediately so callers can poll `/projects/status`.
         """
         if not self.exists(source_slug):
-            raise Exception("Source project does not exist")
+            raise NotFoundError("Source project does not exist")
 
         source_record = self.db_manager.projects_service.get_project(source_slug)
         if source_record is None:
-            raise Exception("Source project not found in database")
+            raise NotFoundError("Source project not found in database")
         source_params: dict[str, Any] = dict(source_record["parameters"])
         source_dir = source_params.get("dir")
         if not source_dir:
@@ -780,7 +786,7 @@ class Orchestrator:
         col_label = "label"
 
         if not path_data.exists():
-            raise Exception("The demo dataset is not available")
+            raise NotFoundError("The demo dataset is not available")
 
         # create name of the project and the directory
         project_name = project_name

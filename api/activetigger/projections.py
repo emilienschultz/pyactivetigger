@@ -14,6 +14,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, NotFoundError
 from activetigger.queue_manager import Queue
 from activetigger.tasks.compute_projection import ComputeProjection
 
@@ -118,7 +119,7 @@ class Projections:
         """
         model = self.models_service.get_model(self.project_slug, name)
         if model is None or model.kind != "projection":
-            raise Exception(f"Projection '{name}' does not exist")
+            raise NotFoundError(f"Projection '{name}' does not exist")
         self.models_service.delete_model(self.project_slug, name)
         Path(model.path).unlink(missing_ok=True)
         self.loaded.pop(name, None)
@@ -139,7 +140,9 @@ class Projections:
         if self.models_service.model_exists(self.project_slug, projection.name):
             raise Exception(f"A model named '{projection.name}' already exists")
         if projection.name in [e.name for e in self.computing if e.kind == "projection"]:
-            raise Exception(f"A projection named '{projection.name}' is already being computed")
+            raise AlreadyExistsError(
+                f"A projection named '{projection.name}' is already being computed"
+            )
 
         unique_id = self.queue.add_task(
             "projection",
@@ -218,7 +221,7 @@ class Projections:
         """
         projection = self.get(name)
         if projection is None:
-            raise Exception("No projection available")
+            raise NotFoundError("No projection available")
         data = projection.data.copy()
 
         if id_mapping is not None and "id_external" in id_mapping.columns:

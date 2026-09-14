@@ -69,3 +69,7 @@ docs/
 
 frontend/src/assets/at-tuna.png
 frontend/src/assets/at-old.png
+
+## TESTS
+
+.schemathesis

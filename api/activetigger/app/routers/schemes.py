@@ -14,6 +14,7 @@ from activetigger.datamodels import (
     SchemeModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 
@@ -41,6 +42,8 @@ def rename_label(
             project.name,
         )
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -67,6 +70,8 @@ def add_label(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -80,10 +85,12 @@ def add_label(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
-    raise HTTPException(status_code=500, detail="Wrong action")
+    raise HTTPException(status_code=400, detail="Wrong action")
 
 
 @router.post("/schemes/codebook", dependencies=[Depends(verified_user)])
@@ -105,6 +112,8 @@ def post_codebook(
             project.name,
         )
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -121,6 +130,8 @@ def get_codebook(
     test_rights(ProjectAction.GET, current_user.username, project.name)
     try:
         return project.schemes.get_codebook(scheme)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -144,6 +155,8 @@ def rename_scheme(
             project.name,
         )
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -166,6 +179,8 @@ def duplicate_scheme(
             project.name,
         )
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -184,6 +199,8 @@ def compare_schemes(
     test_rights(ProjectAction.GET, current_user.username, project.name)
     try:
         return project.schemes.compare(schemeA, schemeB, dataset)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -211,6 +228,8 @@ def post_schemes(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     if action == "delete":
@@ -223,6 +242,8 @@ def post_schemes(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -236,6 +257,8 @@ def post_schemes(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     raise HTTPException(status_code=400, detail="Wrong route")

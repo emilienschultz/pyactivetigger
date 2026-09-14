@@ -9,6 +9,7 @@ from activetigger.datamodels import (
     LexicometricsProjectStateModel,
     LexicometricsStatisticsModel,
 )
+from activetigger.errors import AlreadyExistsError
 from activetigger.queue_manager import Queue
 from activetigger.tasks.compute_lexicometrics import ComputeLexicometrics
 
@@ -76,7 +77,7 @@ class Lexicometrics:
         The task reads the train dataset from the project directory itself.
         """
         if len(self.training()) > 0:
-            raise Exception("Lexicometrics are already being computed")
+            raise AlreadyExistsError("Lexicometrics are already being computed")
 
         parameters = LexicometricsParametersModel(language=language)
         unique_id = self.queue.add_task(

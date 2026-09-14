@@ -375,65 +375,6 @@ export const ProjectExportPage: FC = () => {
               </section>
             )}
 
-            {developmentMode && promptsState && availablePrompts.length > 0 && (
-              <section className="mt-4">
-                <h5 className="fw-semibold">Prompt similarity (experimental)</h5>
-                <hr className="mt-1" />
-                <div className="text-muted small mb-2">
-                  Cosine similarity between a saved prompt and every element of the complete
-                  dataset, as a numeric value for further analysis.
-                </div>
-                <select
-                  className="form-select form-select-sm mb-2"
-                  style={{ maxWidth: '40rem' }}
-                  value={selectedPromptId || ''}
-                  onChange={(e) => setSelectedPromptId(e.currentTarget.value || null)}
-                >
-                  {availablePrompts.map((p) => (
-                    <option key={p.prompt_id} value={p.prompt_id}>
-                      {p.text.length > 80 ? `${p.text.slice(0, 80)}…` : p.text} ({p.feature_name})
-                    </option>
-                  ))}
-                </select>
-                {selectedPrompt && (
-                  <>
-                    {similarityComputing ? (
-                      <div className="text-muted small mt-2">
-                        Computing similarity on the complete dataset
-                        {similarityComputing.progress
-                          ? ` (${Math.round(Number(similarityComputing.progress))}%)`
-                          : ''}
-                        <PulseLoader size={6} className="ms-2" />
-                      </div>
-                    ) : (
-                      <div className="d-flex flex-wrap gap-2 mt-2">
-                        <button
-                          className="btn-secondary-action"
-                          onClick={() => computePromptSimilarity(selectedPrompt.prompt_id, 'all')}
-                        >
-                          {similarityAvailable
-                            ? 'Recompute similarity complete dataset'
-                            : 'Compute similarity complete dataset'}
-                        </button>
-                        {similarityAvailable && (
-                          <button
-                            className="btn-secondary-action"
-                            disabled={similarityDownloading}
-                            onClick={downloadPromptSimilarity}
-                          >
-                            Export similarity complete dataset
-                            {similarityDownloading && (
-                              <PulseLoader color="white" size={6} className="ms-2" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            )}
-
             <section className="mt-4">
               <h5 className="fw-semibold">{isNer ? 'NER models' : 'BERT models'}</h5>
               <hr className="mt-1" />
@@ -551,6 +492,65 @@ export const ProjectExportPage: FC = () => {
                 </button>
               </div>
             </section>
+
+            {developmentMode && promptsState && availablePrompts.length > 0 && (
+              <section className="mt-4">
+                <h5 className="fw-semibold">Prompt similarity</h5>
+                <hr className="mt-1" />
+                <div className="text-muted small mb-2">
+                  Cosine similarity between a saved prompt and every element of the complete
+                  dataset, as a numeric value for further analysis.
+                </div>
+                <select
+                  className="form-select form-select-sm mb-2"
+                  style={{ maxWidth: '40rem' }}
+                  value={selectedPromptId || ''}
+                  onChange={(e) => setSelectedPromptId(e.currentTarget.value || null)}
+                >
+                  {availablePrompts.map((p) => (
+                    <option key={p.prompt_id} value={p.prompt_id}>
+                      {p.text.length > 80 ? `${p.text.slice(0, 80)}…` : p.text} ({p.feature_name})
+                    </option>
+                  ))}
+                </select>
+                {selectedPrompt && (
+                  <>
+                    {similarityComputing ? (
+                      <div className="text-muted small mt-2">
+                        Computing similarity on the complete dataset
+                        {similarityComputing.progress
+                          ? ` (${Math.round(Number(similarityComputing.progress))}%)`
+                          : ''}
+                        <PulseLoader size={6} className="ms-2" />
+                      </div>
+                    ) : (
+                      <div className="d-flex flex-wrap gap-2 mt-2">
+                        <button
+                          className="btn-secondary-action"
+                          onClick={() => computePromptSimilarity(selectedPrompt.prompt_id, 'all')}
+                        >
+                          {similarityAvailable
+                            ? 'Recompute similarity complete dataset'
+                            : 'Compute similarity complete dataset'}
+                        </button>
+                        {similarityAvailable && (
+                          <button
+                            className="btn-secondary-action"
+                            disabled={similarityDownloading}
+                            onClick={downloadPromptSimilarity}
+                          >
+                            Export similarity complete dataset
+                            {similarityDownloading && (
+                              <PulseLoader color="white" size={6} className="ms-2" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            )}
           </div>
         </div>
       </div>

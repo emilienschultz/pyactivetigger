@@ -5,6 +5,7 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     UploadFile,
 )
 
@@ -50,7 +51,7 @@ def start_upload(
 def upload_chunk(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
     upload_id: str,
-    index: int,
+    index: int = Query(ge=0),
     file: UploadFile = File(...),
 ) -> None:
     """

@@ -14,6 +14,7 @@ from activetigger.datamodels import (
     MonitoringQuickModelsModel,
 )
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import NotFoundError
 
 
 class GpuMonitor:
@@ -323,7 +324,7 @@ class Monitoring:
         """
         start_entry = self.db_manager.monitoring_service.get_element_by_process(process_name)
         if start_entry is None:
-            raise ValueError(f"Process {process_name} not found")
+            raise NotFoundError(f"Process {process_name} not found")
 
         # Save the duration of the global process
         events = start_entry.events

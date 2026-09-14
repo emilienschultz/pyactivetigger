@@ -518,7 +518,7 @@ class ProjectionParametersModel(BaseModel):
 
     name: str
     method: str
-    features: list
+    features: list[str]
     parameters: dict[str, float | str | bool | list] = {}
     normalize_features: bool = False
 

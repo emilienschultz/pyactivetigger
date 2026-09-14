@@ -31,6 +31,13 @@ SQLAlchemy 2.0 recipes:
     ```
 """
 
+from activetigger.errors import APIError
 
-class DBException(Exception):
-    pass
+
+class DBException(APIError):
+    # raise sites are "X not found" lookups, so a missing row answers 404
+    status_code = 404
+
+
+class DBAlreadyExists(DBException):
+    status_code = 409

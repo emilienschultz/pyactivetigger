@@ -15,6 +15,7 @@ from activetigger.app.dependencies import (
     verified_user,
 )
 from activetigger.datamodels import PromptInModel, PromptOutModel, UserInDBModel
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 
@@ -47,6 +48,8 @@ def post_prompt(
             project.name,
         )
         return {"unique_id": unique_id}
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -60,6 +63,8 @@ def list_prompts(
     prompts = _require_prompts(project)
     try:
         return prompts.list(user=None if all_users else current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -88,6 +93,8 @@ def compute_prompt_similarity(
             project.name,
         )
         return {"unique_id": unique_id}
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -105,5 +112,7 @@ def delete_prompt(
         get_orchestrator().log_action(
             current_user.username, f"DELETE PROMPT: {prompt_id}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

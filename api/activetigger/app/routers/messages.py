@@ -1,17 +1,20 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
 )
 
 from activetigger.app.dependencies import (
+    ProjectAction,
     ServerAction,
     test_rights,
     verified_user,
 )
 from activetigger.datamodels import MessagesInModel, MessagesOutModel, UserInDBModel
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 
 router = APIRouter(tags=["messages"])
@@ -20,7 +23,7 @@ router = APIRouter(tags=["messages"])
 @router.get("/messages")
 def get_messages(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
-    kind: str,
+    kind: Literal["system", "project", "user"],
     from_user: str | None = None,
     for_user: str | None = None,
     for_project: str | None = None,
@@ -32,12 +35,16 @@ def get_messages(
     """
     try:
         orchestrator = get_orchestrator()
+        if kind == "project" and current_user.username != "root":
+            test_rights(ProjectAction.GET, current_user.username, for_project)
         if current_user.username == "root":
             return orchestrator.messages.get_messages(kind, from_user, for_user, for_project)
         else:
             return orchestrator.messages.get_messages(
                 kind, from_user, current_user.username, for_project
             )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -51,6 +58,8 @@ def get_inbox(
     """
     try:
         return get_orchestrator().messages.get_inbox(current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -68,6 +77,8 @@ def get_codebook_messages(
         return get_orchestrator().messages.get_codebook_messages(
             current_user.username, project_slug
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -94,6 +105,8 @@ def post_message(
             orchestrator.messages.add_message(
                 user_name=sender, kind="system", content=message.content
             )
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         return
@@ -114,6 +127,8 @@ def post_message(
                 content=message.content,
                 recipients=[message.for_user],
             )
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         return
@@ -123,7 +138,10 @@ def post_message(
             raise HTTPException(
                 status_code=400, detail="for_project is required for a project message"
             )
-        members = list(orchestrator.users.get_project_auth(message.for_project).keys())
+        try:
+            members = list(orchestrator.users.get_project_auth(message.for_project).keys())
+        except Exception as e:
+            raise HTTPException(status_code=404, detail="Project not found") from e
         if sender != "root" and sender not in members:
             raise HTTPException(status_code=403, detail="You are not a member of this project")
         try:
@@ -134,6 +152,8 @@ def post_message(
                 recipients=members,
                 for_project=message.for_project,
             )
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         return
@@ -149,6 +169,8 @@ def post_message(
                 content=message.content,
                 recipients=recipients,
             )
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
         return
@@ -159,7 +181,7 @@ def post_message(
 @router.post("/messages/delete")
 def delete_message(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
-    message_id: int,
+    message_id: int = Query(ge=0),
 ) -> None:
     """
     Delete a message.
@@ -176,7 +198,7 @@ def delete_message(
             raise HTTPException(
                 status_code=403, detail="You can only delete messages addressed to you"
             )
-    except HTTPException:
+    except (HTTPException, APIError, OverflowError):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

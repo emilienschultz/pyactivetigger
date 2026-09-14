@@ -26,6 +26,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.functions import get_model_metrics
 from activetigger.queue_manager import Queue
 from activetigger.tasks.predict_ner import PredictNer
@@ -162,7 +163,7 @@ class NerModels:
         if len(df.dropna()) < num_min_annotations:
             raise Exception(f"Less than {num_min_annotations} elements annotated")
         if self.models_service.model_exists(project, name):
-            raise Exception("A model with this name already exists")
+            raise AlreadyExistsError("A model with this name already exists")
         if config.cpu_only:
             params.gpu = False
         if params.gpu:
@@ -227,7 +228,7 @@ class NerModels:
         path_test: Path | None = None,
     ) -> str:
         if not (self.path.joinpath(name)).exists():
-            raise Exception("The model does not exist")
+            raise NotFoundError("The model does not exist")
         stale_progress = self.path.joinpath(name).joinpath("progress_predict")
         if stale_progress.exists():
             stale_progress.unlink()
@@ -293,14 +294,14 @@ class NerModels:
             errors.append(f"tar archive: {e}")
         db_removed = self.models_service.delete_model(self.project_slug, name)
         if not db_removed and not had_files:
-            raise FileNotFoundError("Model does not exist")
+            raise NotFoundError("Model does not exist")
         if errors:
             raise Exception(f"Problem to delete model files : {'; '.join(errors)}")
 
     def rename(self, former_name: str, new_name: str) -> None:
         model = self.models_service.get_model(self.project_slug, former_name)
         if model is None:
-            raise Exception("Model does not exist")
+            raise NotFoundError("Model does not exist")
         if (Path(model.path) / "status.log").exists():
             raise Exception("Model is currently computing")
         self.models_service.rename_model(self.project_slug, former_name, new_name)
@@ -379,7 +380,7 @@ class NerModels:
     def export_ner(self, name: str) -> StaticFileModel:
         file = f"{config.data_path}/projects/static/{self.project_slug}/{name}.tar.gz"
         if not Path(file).exists():
-            raise FileNotFoundError("file does not exist")
+            raise NotFoundError("file does not exist")
         return StaticFileModel(name=f"{name}.tar.gz", path=f"{self.project_slug}/{name}.tar.gz")
 
     def get_progress(self, model_name: str, status: str) -> Callable[[], Optional[float]]:
@@ -388,7 +389,7 @@ class NerModels:
         elif status == "predicting":
             path_model = self.path.joinpath(model_name).joinpath("progress_predict")
         else:
-            raise Exception("Status not recognized")
+            raise InvalidInputError("Status not recognized")
 
         def progress():
             if path_model.exists():
@@ -435,7 +436,7 @@ class NerModels:
 
     def get_informations(self, model_name: str) -> ModelInformationsModel:
         if not self.exists(model_name):
-            raise Exception(f"The model {model_name} does not exist")
+            raise NotFoundError(f"The model {model_name} does not exist")
         metrics = get_model_metrics(self.path.joinpath(model_name)) or {}
         db_params = self.models_service.get_model_db_parameters(self.project_slug, model_name) or {}
         return ModelInformationsModel(

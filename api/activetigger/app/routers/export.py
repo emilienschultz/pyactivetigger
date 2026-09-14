@@ -18,6 +18,7 @@ from activetigger.datamodels import (
     ExportGenerationsParams,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.project import Project
 
 router = APIRouter(tags=["export"])
@@ -37,6 +38,8 @@ def export_data(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.export_data(format=format, scheme=scheme, dataset=dataset)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -52,6 +55,8 @@ def export_summary(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.export_summary()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -69,6 +74,8 @@ def export_features(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.export_features(features=features, format=format)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -91,6 +98,8 @@ def export_projection(
             col_id=project.params.col_id,
             id_mapping=project.data.index,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -136,6 +145,8 @@ def export_prediction(
             format=format,
             col_id=project.params.col_id,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -171,11 +182,17 @@ def export_bert(
                 "Content-Type": "application/octet-stream",
             },
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/export/raw", dependencies=[Depends(verified_user)])
+@router.get(
+    "/export/raw",
+    dependencies=[Depends(verified_user)],
+    responses={200: {"content": {"application/octet-stream": {}}}},
+)
 def export_raw(
     project: Annotated[Project, Depends(get_project)],
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
@@ -205,6 +222,8 @@ def export_raw(
                 "Content-Type": "application/octet-stream",
             },
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -232,11 +251,17 @@ def export_prompt_similarity(
             col_id=project.params.col_id,
         )
         return FileResponse(path=path, filename=file_name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/export/generations", dependencies=[Depends(verified_user)])
+@router.post(
+    "/export/generations",
+    dependencies=[Depends(verified_user)],
+    responses={200: {"content": {"text/csv": {}}}},
+)
 def export_generations(
     project: Annotated[Project, Depends(get_project)],
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
@@ -263,6 +288,8 @@ def export_generations(
         }
 
         return Response(content=csv_data, media_type="text/csv", headers=headers)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -279,6 +306,8 @@ def export_bertopics_topics(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.bertopic.export_topics(name=name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -295,6 +324,8 @@ def export_bertopics_clusters(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.bertopic.export_clusters(name=name, col_id=project.params.col_id)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -311,6 +342,8 @@ def export_bertopics_report(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.bertopic.export_report(name=name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,6 +360,8 @@ def export_bertopics_embeddings(
     test_rights(ProjectAction.EXPORT_DATA, current_user.username, project.name)
     try:
         return project.bertopic.export_embeddings(name=name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

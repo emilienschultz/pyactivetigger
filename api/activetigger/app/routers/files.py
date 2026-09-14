@@ -46,7 +46,7 @@ def copy_existing_data(
     # check if the project does not already exist
     if orchestrator.exists(project_name):
         raise HTTPException(
-            status_code=500, detail="Project already exists, please choose another name"
+            status_code=409, detail="Project already exists, please choose another name"
         )
 
     # Validate the source. `source_project` is user-supplied and used in a path,

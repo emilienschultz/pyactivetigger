@@ -4,6 +4,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Path,
 )
 
 from activetigger.app.dependencies import (
@@ -23,6 +24,7 @@ from activetigger.datamodels import (
     TableOutModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.generation.generations import Generations
 from activetigger.generation.ollama import Ollama
 from activetigger.generation.openapi import OpenAPI
@@ -40,6 +42,8 @@ def list_generation_models() -> list[GenerationModelApi]:
     """
     try:
         return Generations.get_available_models()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -51,6 +55,8 @@ def list_ollama_models(endpoint: str) -> list[dict[str, str]]:
     """
     try:
         return Ollama.list_models(endpoint)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -75,6 +81,8 @@ def list_openai_compatible_models(
         if endpoint is None:
             raise Exception("You should provide an endpoint")
         return OpenAPI.list_models(endpoint, credentials)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -90,6 +98,8 @@ def list_project_generation_models(
     test_rights(ProjectAction.GENERATE, current_user.username, project.name)
     try:
         return project.generations.available_models(project.name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -113,6 +123,8 @@ def add_project_generation_models(
             model.endpoint = model.endpoint or endpoint
             model.credentials = credentials
         return project.generations.add_model(project.name, model, current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -124,7 +136,7 @@ def add_project_generation_models(
 def delete_project_generation_models(
     project: Annotated[Project, Depends(get_project)],
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
-    model_id: int,
+    model_id: int = Path(ge=0),
 ) -> None:
     """
     Delete a GenAI model from the project
@@ -132,6 +144,8 @@ def delete_project_generation_models(
     test_rights(ProjectAction.UPDATE, current_user.username, project.name)
     try:
         project.generations.delete_model(project.name, model_id)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -156,6 +170,8 @@ def postgenerate(
         )
         return None
 
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -173,6 +189,8 @@ def getgenerate(
     try:
         table = project.get_generated(project.name, current_user.username, params)
         return TableOutModel(items=table.to_dict(orient="records"), total=len(table))
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error in loading generated data" + str(e))
 
@@ -188,6 +206,8 @@ def dropgenerate(
     test_rights(ProjectAction.GENERATE, current_user.username, project.name)
     try:
         project.generations.drop_generated(project.name, current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -203,6 +223,8 @@ def get_prompts(
     test_rights(ProjectAction.GENERATE, current_user.username, project.name)
     try:
         return project.generations.get_prompts(project.name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -219,6 +241,8 @@ def add_prompt(
     test_rights(ProjectAction.GENERATE, current_user.username, project.name)
     try:
         project.generations.save_prompt(prompt, current_user.username, project.name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -235,5 +259,7 @@ def delete_prompt(
     test_rights(ProjectAction.UPDATE, current_user.username, project.name)
     try:
         project.generations.delete_prompt(int(prompt_id))
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

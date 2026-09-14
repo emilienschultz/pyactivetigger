@@ -20,6 +20,7 @@ from activetigger.datamodels import (
     FeatureModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 from activetigger.uploads import get_upload_staging
@@ -66,6 +67,8 @@ def post_embeddings(
         get_orchestrator().log_action(
             current_user.username, f"COMPUTE FEATURE: {feature.type}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -85,6 +88,8 @@ def delete_feature(
         get_orchestrator().log_action(
             current_user.username, f"DELETE FEATURE: {name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -101,6 +106,8 @@ def reset_features(
     try:
         project.features.reset_features_file()
         get_orchestrator().log_action(current_user.username, "RESET FEATURES", project.name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -159,6 +166,8 @@ def import_feature(
         raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -172,5 +181,7 @@ def get_feature_info(
     """
     try:
         return project.features.get_available()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

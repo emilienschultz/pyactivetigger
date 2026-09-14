@@ -25,6 +25,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.functions import get_model_metrics
 from activetigger.queue_manager import Queue
 from activetigger.tasks.predict_image import PredictImage
@@ -194,7 +195,7 @@ class ImageModels:
         model_name = name
 
         if self.models_service.model_exists(project, model_name):
-            raise Exception("A model with this name already exists")
+            raise AlreadyExistsError("A model with this name already exists")
 
         if config.cpu_only:
             params.gpu = False
@@ -278,7 +279,7 @@ class ImageModels:
         """
 
         if not (self.path.joinpath(name)).exists():
-            raise Exception("The model does not exist")
+            raise NotFoundError("The model does not exist")
 
         if df is None and dataset != "all":
             raise Exception("Dataframe is required for this dataset")
@@ -328,7 +329,7 @@ class ImageModels:
         Delete a model
         """
         if not self.models_service.delete_model(self.project_slug, name):
-            raise FileNotFoundError("Model does not exist")
+            raise NotFoundError("Model does not exist")
         try:
             if name and name != "":
                 shutil.rmtree(self.path.joinpath(name))
@@ -350,7 +351,7 @@ class ImageModels:
         """
         model = self.models_service.get_model(self.project_slug, former_name)
         if model is None:
-            raise Exception("Model does not exist")
+            raise NotFoundError("Model does not exist")
         if (Path(model.path) / "status.log").exists():
             raise Exception("Model is currently computing")
         self.models_service.rename_model(self.project_slug, former_name, new_name)
@@ -434,7 +435,7 @@ class ImageModels:
         """
         file = f"{config.data_path}/projects/static/{self.project_slug}/{name}.tar.gz"
         if not Path(file).exists():
-            raise FileNotFoundError("file does not exist")
+            raise NotFoundError("file does not exist")
         return StaticFileModel(
             name=f"{name}.tar.gz",
             path=f"{self.project_slug}/{name}.tar.gz",
@@ -451,7 +452,7 @@ class ImageModels:
         elif status == "predicting":
             path_model = self.path.joinpath(model_name).joinpath("progress_predict")
         else:
-            raise Exception("Status not recognized")
+            raise InvalidInputError("Status not recognized")
 
         def progress():
             if path_model.exists():
@@ -498,7 +499,7 @@ class ImageModels:
 
     def get_informations(self, model_name) -> ModelInformationsModel:
         if not self.exists(model_name):
-            raise Exception(f"The model {model_name} does not exist")
+            raise NotFoundError(f"The model {model_name} does not exist")
         metrics = get_model_metrics(self.path.joinpath(model_name))
         if metrics is None:
             metrics = {}

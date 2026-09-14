@@ -34,6 +34,7 @@ from activetigger.datamodels import (
     UserInDBModel,
     WaitingModel,
 )
+from activetigger.errors import APIError
 from activetigger.functions import slugify
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
@@ -58,6 +59,8 @@ def close_project(
     test_rights(ServerAction.CREATE_PROJECT, current_user.username)
     try:
         get_orchestrator().stop_project(project_slug)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -74,6 +77,8 @@ def get_project_statistics(
     test_rights(ProjectAction.GET, current_user.username, project.project_slug)
     try:
         return project.get_statistics(scheme=scheme)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -89,6 +94,8 @@ def get_lexicometrics(
     test_rights(ProjectAction.GET, current_user.username, project.project_slug)
     try:
         return project.lexicometrics.get()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -114,6 +121,8 @@ def compute_lexicometrics(
             current_user.username, "COMPUTE LEXICOMETRICS", project.project_slug
         )
         return WaitingModel(detail="Lexicometrics are computing")
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -131,6 +140,8 @@ def get_project_auth(
     test_rights(ProjectAction.MONITOR, current_user.username, project_slug)
     try:
         return ProjectAuthsModel(auth=orchestrator.users.get_project_auth(project_slug))
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500) from e
 
@@ -172,7 +183,7 @@ def new_project(
                 project_path.mkdir(parents=True)
             except FileExistsError:
                 raise HTTPException(
-                    status_code=500,
+                    status_code=409,
                     detail="Project already exists, please choose another name",
                 )
             try:
@@ -192,7 +203,7 @@ def new_project(
             current_user.username, f"START CREATING PROJECT: {project_slug}", project_slug
         )
         return project_slug
-    except HTTPException:
+    except (HTTPException, APIError, OverflowError):
         raise
     except Exception as e:
         orchestrator.clean_unfinished_project(project_name=project.project_name)
@@ -224,6 +235,8 @@ def update_project(
             f"INFO UPDATE PROJECT: {project.project_slug}",
             project.project_slug,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -249,6 +262,8 @@ def duplicate_project(
             new_slug,
         )
         return new_slug
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -271,6 +286,8 @@ def delete_project(
         orchestrator.log_action(
             current_user.username, f"DELETE PROJECT: {project_slug}", project_slug
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -314,6 +331,8 @@ def get_project_status(
             return "existing"
         else:
             return "not existing"
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -333,6 +352,8 @@ def delete_evalset(
         get_orchestrator().log_action(
             current_user.username, f"DELETE EVALSET {dataset}", project.project_slug
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -379,6 +400,8 @@ def add_testdata(
             current_user.username, f"ADD EVALSET {dataset}", project.project_slug
         )
         return id
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -398,6 +421,8 @@ def get_projects(
             storage_used=orchestrator.users.get_storage(current_user.username),
             storage_limit=orchestrator.users.get_storage_limit(current_user.username),
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -415,6 +440,8 @@ def get_project_datasets(
         toy_datasets = orchestrator.get_toy_datasets() if include_toy_datasets else []
         auth_datasets = orchestrator.users.get_auth_datasets(current_user.username)
         return auth_datasets, toy_datasets
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -433,6 +460,8 @@ def get_project_state(
     test_rights(ProjectAction.GET, current_user.username, project.project_slug)
     try:
         return project.state()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

@@ -4,6 +4,8 @@ from typing import cast
 import pandas as pd
 from pandas import DataFrame
 
+from activetigger.errors import InvalidInputError
+
 
 class Data:
     """
@@ -80,7 +82,7 @@ class Data:
         elif file_path.suffix.lower() == ".xlsx":
             return Data._sanitize_dataset(pd.read_excel(file_path))
         else:
-            raise ValueError(f"Unsupported file format: {file_path}")
+            raise InvalidInputError(f"Unsupported file format: {file_path}")
 
     def get_path(self, filename: str) -> Path:
         """
@@ -111,7 +113,7 @@ class Data:
                 self.test = pd.read_parquet(self.path_test)
                 self.test["dataset"] = "test"
         else:
-            raise ValueError(f"Unknown dataset: {dataset}")
+            raise InvalidInputError(f"Unknown dataset: {dataset}")
 
         # temporary fix for index (to remove when the index will be properly set in the raw file)
         if "id_external" not in self.train.columns:

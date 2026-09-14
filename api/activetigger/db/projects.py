@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session as SessionType
 from sqlalchemy.orm import sessionmaker
 
 from activetigger.datamodels import AnnotationModel, FeatureDescriptionModelOut
-from activetigger.db import DBException
+from activetigger.db import DBAlreadyExists, DBException
 from activetigger.db.models import (
     Annotations,
     Auths,
@@ -228,7 +228,7 @@ class ProjectsService:
                 select(Projects).filter_by(project_slug=target_slug)
             ).first()
             if existing_target is not None:
-                raise DBException("Target project already exists")
+                raise DBAlreadyExists("Target project already exists")
             source_project = session.scalars(
                 select(Projects).filter_by(project_slug=source_slug)
             ).first()
@@ -705,7 +705,7 @@ class ProjectsService:
                 select(Schemes).filter_by(project_slug=project_slug, name=new_name)
             ).first()
             if existing is not None:
-                raise DBException("A scheme with the new name already exists")
+                raise DBAlreadyExists("A scheme with the new name already exists")
 
             # Create new scheme entry
             new_scheme = Schemes(
@@ -766,7 +766,7 @@ class ProjectsService:
                 select(Schemes).filter_by(project_slug=project_slug, name=new_name)
             ).first()
             if existing is not None:
-                raise DBException("A scheme with the new name already exists")
+                raise DBAlreadyExists("A scheme with the new name already exists")
 
             # Create new scheme entry
             new_scheme = Schemes(

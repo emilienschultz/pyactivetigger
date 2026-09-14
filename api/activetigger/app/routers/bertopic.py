@@ -10,6 +10,7 @@ from activetigger.datamodels import (
     ComputeBertopicModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 
@@ -60,6 +61,8 @@ def compute_bertopic(
             user_name=current_user.username,
         )
         return unique_id
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -80,6 +83,8 @@ def get_bertopic_topics(
             topics=project.bertopic.get_topics(name=name),
             parameters=project.bertopic.get_parameters(name=name),
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -97,6 +102,8 @@ def get_bertopic_projection(
         raise HTTPException(status_code=400, detail="BERTopic is not supported for image projects")
     try:
         return project.bertopic.get_projection(name=name)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -117,6 +124,8 @@ def delete_bertopic_model(
         get_orchestrator().log_action(
             current_user.username, f"DELETE BERTopic MODEL: {name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

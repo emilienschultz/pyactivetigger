@@ -57,6 +57,7 @@ from activetigger.datamodels import (
     UpdateComputing,
 )
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.features import Features
 from activetigger.functions import (
     clean_regex,
@@ -249,7 +250,7 @@ class Project:
         existing_project = self.db_manager.projects_service.get_project(project_slug)
 
         if not existing_project:
-            raise ValueError("This project does not exist")
+            raise NotFoundError("This project does not exist")
 
         self.params = ProjectModel(**existing_project["parameters"])
 
@@ -380,9 +381,9 @@ class Project:
 
         # test if the name of the column is specified
         if params.col_id is None or params.col_id == "":
-            raise Exception("No column selected for the id")
+            raise InvalidInputError("No column selected for the id")
         if params.cols_text is None or len(params.cols_text) == 0:
-            raise Exception("No column selected for the text")
+            raise InvalidInputError("No column selected for the text")
 
         # add the dedicated directory
         params.dir = path.joinpath(self.project_slug)
@@ -588,7 +589,7 @@ class Project:
             raise Exception("No directory for project")
         path = self.params.dir.joinpath(f"{dataset}.parquet")
         if not path.exists():
-            raise Exception("No eval data available")
+            raise NotFoundError("No eval data available")
         os.remove(path)
         if getattr(self.params, "kind", "text") == "image":
             eval_images_dir = self.params.dir.joinpath("images", f"eval_{dataset}")
@@ -625,7 +626,7 @@ class Project:
         if self.params.dir is None:
             raise Exception("Cannot add eval data without a valid dir")
         if dataset not in ["test", "valid"]:
-            raise Exception("Dataset should be test or valid")
+            raise InvalidInputError("Dataset should be test or valid")
         if dataset == "test" and self.params.test:
             raise Exception("There is already a test dataset")
         if dataset == "valid" and self.params.valid:
@@ -822,12 +823,12 @@ class Project:
         if quickmodel.model not in list(self.quickmodels.available_models.keys()):
             raise Exception("Model not available")
         if quickmodel.scheme not in availabe_schemes:
-            raise Exception("Scheme not available")
+            raise NotFoundError("Scheme not available")
         if len(availabe_schemes[quickmodel.scheme].labels) < 2:
             raise Exception("Not enough labels in the scheme")
         exist = self.quickmodels.exists(quickmodel.name)
         if exist and not retrain:
-            raise Exception("A quickmodel with this name already exists")
+            raise AlreadyExistsError("A quickmodel with this name already exists")
         if not exist and retrain:
             raise Exception("No quickmodel with this name to retrain")
 
@@ -922,20 +923,20 @@ class Project:
         """
         if type == "quickmodel":
             if not self.quickmodels.exists(name):
-                raise Exception("Quickmodel doesn't exist")
+                raise NotFoundError("Quickmodel doesn't exist")
             else:
                 prediction = self.quickmodels.get_prediction(name)
         elif type == "languagemodel":
             if not self.languagemodels.exists(name):
-                raise Exception("Languagemodel doesn't exist")
+                raise NotFoundError("Languagemodel doesn't exist")
             else:
                 prediction = self.languagemodels.get_prediction(name)
         elif type == "imagemodel":
             if self.imagemodels is None or not self.imagemodels.exists(name):
-                raise Exception("Image model doesn't exist")
+                raise NotFoundError("Image model doesn't exist")
             prediction = self.imagemodels.get_prediction(name)
         else:
-            raise Exception("Model type not recognized")
+            raise InvalidInputError("Model type not recognized")
         return prediction
 
     def get_prediction_element(self, kind: str, name: str, element_id: str) -> PredictedLabel:
@@ -974,7 +975,7 @@ class Project:
         """
 
         if next.scheme not in self.schemes.available():
-            raise ValueError("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
 
         # select the current dataset
         if next.dataset == "test":
@@ -988,7 +989,7 @@ class Project:
         elif next.dataset == "train":
             df = self.schemes.get_scheme(next.scheme, complete=True, datasets=["train"])
         else:
-            raise ValueError("Dataset should be test, valid or train")
+            raise InvalidInputError("Dataset should be test, valid or train")
 
         # check conditions for active learning and get proba
         proba = None
@@ -1019,9 +1020,11 @@ class Project:
             f = df["comment"].fillna("").str.len() > 0
         elif next.sample == "wrong":
             if next.dataset != "train":
-                raise ValueError("Wrong-prediction filter is only available on the train dataset")
+                raise InvalidInputError(
+                    "Wrong-prediction filter is only available on the train dataset"
+                )
             if proba is None or "prediction" not in proba.columns:
-                raise ValueError(
+                raise InvalidInputError(
                     "Wrong-prediction filter requires an active model with predictions"
                 )
             f = df["labels"].notna() & (df["labels"] != proba["prediction"])
@@ -1046,7 +1049,7 @@ class Project:
                 ]
                 df = df.join(self.data.test[existing_cols_contexts])
             else:
-                raise ValueError("Dataset should be test, valid or train")
+                raise InvalidInputError("Dataset should be test, valid or train")
 
             # sanitize
             df["ID"] = df.index  # duplicate the id column
@@ -1076,7 +1079,7 @@ class Project:
                 raise ValueError("No active projection selected for frame selection")
             projection = self.projections.get(next.projection_name)
             if projection is None:
-                raise ValueError(f"Projection '{next.projection_name}' does not exist")
+                raise NotFoundError(f"Projection '{next.projection_name}' does not exist")
             projection_data = projection.data
             if projection_data is None:
                 raise ValueError("No vizualisation data available")
@@ -1090,7 +1093,7 @@ class Project:
 
         # test if there is at least one element available
         if f.sum() == 0:
-            raise ValueError("No element available with this selection mode.")
+            raise NotFoundError("No element available with this selection mode.")
 
         # filter by history
         ss = df[f].drop(next.history, errors="ignore")
@@ -1109,7 +1112,7 @@ class Project:
         # validate selection method
         valid_selections = {"fixed", "random", "maxprob", "active", "prompt"}
         if next.selection not in valid_selections:
-            raise ValueError(f"Unknown selection method: '{next.selection}'")
+            raise InvalidInputError(f"Unknown selection method: '{next.selection}'")
 
         # select an element based on the method
 
@@ -1201,7 +1204,7 @@ class Project:
                 ranks[eid] = loc + 1
                 indicators[eid] = f"similarity: {round(similarities[eid], 3)}"
         if len(element_ids) == 0:
-            raise ValueError("No element available with this selection mode.")
+            raise NotFoundError("No element available with this selection mode.")
 
         # build the output for each selected element
         elements: list[ElementOutModel] = []
@@ -1286,14 +1289,14 @@ class Project:
             if self.data.valid is None:
                 raise Exception("Valid dataset is not defined")
             if element.element_id not in self.data.valid.index:
-                raise Exception("Element does not exist.")
+                raise NotFoundError("Element does not exist.")
             text = str(self.data.valid.loc[element.element_id, "text"])
 
         if element.dataset == "test":
             if self.data.test is None:
                 raise Exception("Test dataset is not defined")
             if element.element_id not in self.data.test.index:
-                raise Exception("Element does not exist.")
+                raise NotFoundError("Element does not exist.")
             text = str(self.data.test.loc[element.element_id, "text"])
 
         # case for train with more information
@@ -1301,7 +1304,7 @@ class Project:
             if self.data.train is None:
                 raise Exception("Train dataset is not defined")
             if element.element_id not in self.data.train.index:
-                raise Exception("Element does not exist.")
+                raise NotFoundError("Element does not exist.")
 
             text = str(self.data.train.loc[element.element_id, "text"])
 
@@ -1331,8 +1334,8 @@ class Project:
             context = {i.replace("dataset_", ""): str(context[i]) for i in context}
 
         if text is None:
-            raise Exception(
-                (f"Element {element.element_id} was not found in dataset {element.dataset}")
+            raise NotFoundError(
+                f"Element {element.element_id} was not found in dataset {element.dataset}"
             )
 
         return ElementOutModel(
@@ -1375,11 +1378,11 @@ class Project:
         Generate a description of a current project/scheme/user
         """
         if scheme is None:
-            raise Exception("Scheme is required")
+            raise InvalidInputError("Scheme is required")
 
         schemes = self.schemes.available()
         if scheme not in schemes:
-            raise Exception("Scheme not available")
+            raise NotFoundError("Scheme not available")
         kind = schemes[scheme].kind
 
         users = self.db_manager.users_service.get_coding_users(scheme, self.params.project_slug)
@@ -1447,17 +1450,17 @@ class Project:
         # get & add predictions if available
         if active_model is not None and active_model.type == "quickmodel":
             if not self.quickmodels.exists(active_model.value):
-                raise Exception("Quickmodel doesn't exist")
+                raise NotFoundError("Quickmodel doesn't exist")
             data["prediction"] = self.quickmodels.get_prediction(active_model.value)["prediction"]
         elif active_model is not None and active_model.type == "languagemodel":
             if not self.languagemodels.exists(active_model.value):
-                raise Exception("Languagemodel doesn't exist")
+                raise NotFoundError("Languagemodel doesn't exist")
             data["prediction"] = self.languagemodels.get_prediction(active_model.value)[
                 "prediction"
             ]
         elif active_model is not None and active_model.type == "imagemodel":
             if self.imagemodels is None or not self.imagemodels.exists(active_model.value):
-                raise Exception("Image model doesn't exist")
+                raise NotFoundError("Image model doesn't exist")
             data["prediction"] = self.imagemodels.get_prediction(active_model.value)["prediction"]
 
         if "prediction" in data:
@@ -1812,6 +1815,9 @@ class Project:
         SHARED_COLS = ["dataset", "text", "id_external"]
         SCHEME_COLS = ["labels", "user", "timestamp", "comment"]
 
+        if format not in ["csv", "parquet", "xlsx"]:
+            raise InvalidInputError("Format must be csv, parquet or xlsx")
+
         path = self.params.dir  # path of the data
         if path is None:
             raise ValueError("Problem of filesystem for project")
@@ -1819,10 +1825,10 @@ class Project:
         # test dataset availability
         if dataset == "valid":
             if self.data.valid is None:
-                raise Exception("No valid data available")
+                raise NotFoundError("No valid data available")
         if dataset == "test":
             if self.data.test is None:
-                raise Exception("No test data available")
+                raise NotFoundError("No test data available")
 
         # for a specific scheme and dataset
         if scheme != "all" and dataset in ["train", "test", "valid"]:
@@ -1855,7 +1861,7 @@ class Project:
             file_name = f"export_tags_{self.name}_all.{format}"
             dropna = False
         else:
-            raise Exception("Scheme or dataset not recognized")
+            raise InvalidInputError("Scheme or dataset not recognized")
 
         # transformation of the data
         if dropna:
@@ -2187,7 +2193,7 @@ class Project:
             col_label = "labels"
             path_data = None
         else:
-            raise Exception(f"Dataset {dataset_type} not recognized")
+            raise InvalidInputError(f"Dataset {dataset_type} not recognized")
 
         scheme = self.schemes.available()[scheme_name]
         if scheme.kind != "span":
@@ -2324,7 +2330,7 @@ class Project:
             col_label = "labels"
             path_data = None
         else:
-            raise Exception(f"Dataset {dataset_type} not recognized")
+            raise InvalidInputError(f"Dataset {dataset_type} not recognized")
 
         scheme_ = self.schemes.available()[scheme_name]
         training_kind = scheme_.kind
@@ -2391,7 +2397,7 @@ class Project:
             col_label = "labels"
             path_data = None
         else:
-            raise Exception(f"Dataset {dataset_type} not recognized")
+            raise InvalidInputError(f"Dataset {dataset_type} not recognized")
 
         scheme_ = self.schemes.available()[scheme_name]
         training_kind = scheme_.kind
@@ -2439,7 +2445,7 @@ class Project:
             raise Exception("No dataset available for prediction")
         sm = self.quickmodels.get(model_name)
         if sm is None:
-            raise Exception(f"Quick model {model_name} not found")
+            raise NotFoundError(f"Quick model {model_name} not found")
 
         # build the X, y dataframe
         df = self.features.get(sm.features, dataset=dataset_type, keep_dataset_column=True)

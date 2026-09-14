@@ -26,6 +26,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.functions import get_model_metrics
 from activetigger.queue_manager import Queue
 from activetigger.tasks.predict_bert import PredictBertMultiClass
@@ -185,7 +186,7 @@ class LanguageModels:
         db_removed = self.language_models_service.delete_model(self.project_slug, name)
 
         if not db_removed and not had_files:
-            raise FileNotFoundError("Model does not exist")
+            raise NotFoundError("Model does not exist")
 
         if errors:
             raise Exception(f"Problem to delete model files : {'; '.join(errors)}")
@@ -247,7 +248,7 @@ class LanguageModels:
 
         # check if a project not already exist
         if self.language_models_service.model_exists(project, model_name):
-            raise Exception("A model with this name already exists")
+            raise AlreadyExistsError("A model with this name already exists")
 
         # force CPU when cpu_only mode
         if config.cpu_only:
@@ -345,7 +346,7 @@ class LanguageModels:
         Start predicting process
         """
         if not (self.path.joinpath(name)).exists():
-            raise Exception("The model does not exist")
+            raise NotFoundError("The model does not exist")
 
         # remove stale progress left by a previous run whose worker died
         # before cleanup; otherwise the frontend shows the old percentage
@@ -407,7 +408,7 @@ class LanguageModels:
         # get model
         model = self.language_models_service.get_model(self.project_slug, former_name)
         if model is None:
-            raise Exception("Model does not exist")
+            raise NotFoundError("Model does not exist")
         if (Path(model.path) / "status.log").exists():
             raise Exception("Model is currently computing")
         self.language_models_service.rename_model(self.project_slug, former_name, new_name)
@@ -473,7 +474,7 @@ class LanguageModels:
         file = f"{config.data_path}/projects/static/{self.project_slug}/{name}.tar.gz"
 
         if not Path(file).exists():
-            raise FileNotFoundError("file does not exist")
+            raise NotFoundError("file does not exist")
         return StaticFileModel(
             name=f"{name}.tar.gz",
             path=f"{self.project_slug}/{name}.tar.gz",
@@ -557,7 +558,7 @@ class LanguageModels:
         elif status == "predicting":
             path_model = self.path.joinpath(model_name).joinpath("progress_predict")
         else:
-            raise Exception("Status not recognized")
+            raise InvalidInputError("Status not recognized")
 
         def progress_predicting():
             if path_model.exists():
@@ -614,7 +615,7 @@ class LanguageModels:
         """
 
         if not self.exists(model_name):
-            raise Exception(f"The model {model_name} does not exist")
+            raise NotFoundError(f"The model {model_name} does not exist")
 
         metrics = get_model_metrics(self.path.joinpath(model_name))
         if metrics is None:

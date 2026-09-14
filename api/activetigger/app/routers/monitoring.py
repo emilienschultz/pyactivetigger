@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from activetigger.app.dependencies import ServerAction, test_rights, verified_user
 from activetigger.datamodels import (
@@ -53,7 +53,7 @@ def get_all_projects(
 @router.get("/monitoring/activity")
 def get_monitoring_activity(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
-    days: int = 7,
+    days: int = Query(7, ge=1, le=3650),
 ) -> MonitoringActivityModel:
     """
     Hourly timeline of the instance activity: annotations made and

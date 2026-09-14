@@ -11,10 +11,11 @@ from fastapi import (
     Depends,
     FastAPI,
     HTTPException,
+    Query,
     Request,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 
@@ -44,6 +45,7 @@ from activetigger.datamodels import (
     TokenModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 
 # ensure the static dir exists before the mount below; orchestrator init runs in lifespan
@@ -67,6 +69,18 @@ async def lifespan(app: FastAPI):
 
 # starting the app
 app = FastAPI(lifespan=lifespan, root_path="/api")
+
+
+@app.exception_handler(APIError)
+async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
+
+
+@app.exception_handler(OverflowError)
+async def overflow_error_handler(request: Request, exc: OverflowError) -> JSONResponse:
+    # numeric input beyond what the storage layer accepts (SQLite INTEGER, C int, dates)
+    return JSONResponse(status_code=422, content={"detail": f"Value out of range: {exc}"})
+
 
 # setup file logger for fastapi events
 log_dir = Path(config.data_path) / "projects" / "logs"
@@ -133,22 +147,32 @@ app.mount(
     "/static", StaticFiles(directory=Path(config.data_path) / "projects" / "static"), name="static"
 )
 
+# error statuses any authenticated route can answer, documented in the OpenAPI schema
+COMMON_ERROR_RESPONSES: dict[int | str, dict] = {
+    400: {"description": "Invalid request"},
+    401: {"description": "Not authenticated"},
+    403: {"description": "Not enough rights"},
+    404: {"description": "Resource not found"},
+    409: {"description": "Resource already exists"},
+    500: {"description": "Internal server error"},
+}
+
 # add routers
-app.include_router(users.router)
-app.include_router(projects.router)
-app.include_router(annotations.router)
-app.include_router(schemes.router)
-app.include_router(features.router)
-app.include_router(prompts.router)
-app.include_router(export.router)
-app.include_router(models.router)
-app.include_router(generation.router)
-app.include_router(files.router)
-app.include_router(bertopic.router)
-app.include_router(messages.router)
-app.include_router(monitoring.router)
-app.include_router(toolbox.router)
-app.include_router(upload.router)
+app.include_router(users.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(projects.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(annotations.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(schemes.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(features.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(prompts.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(export.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(models.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(generation.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(files.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(bertopic.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(messages.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(monitoring.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(toolbox.router, responses=COMMON_ERROR_RESPONSES)
+app.include_router(upload.router, responses=COMMON_ERROR_RESPONSES)
 
 
 # allow multiple servers (avoir CORS error)
@@ -190,7 +214,9 @@ def get_version() -> str:
     return __version__
 
 
-@app.post("/server/restart", dependencies=[Depends(verified_user)])
+@app.post(
+    "/server/restart", dependencies=[Depends(verified_user)], responses=COMMON_ERROR_RESPONSES
+)
 def restart_queue(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
 ) -> None:
@@ -200,6 +226,8 @@ def restart_queue(
     test_rights(ServerAction.MANAGE_SERVER, current_user.username)
     try:
         get_orchestrator().reset()
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -212,7 +240,7 @@ def get_queue() -> ServerStateModel:
     return get_orchestrator().server_state
 
 
-@app.post("/token")
+@app.post("/token", responses={401: {"description": "Wrong username or password"}})
 def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> TokenModel:
@@ -230,11 +258,11 @@ def login_for_access_token(
         raise HTTPException(status_code=401, detail=str(e)) from e
 
 
-@app.get("/logs", dependencies=[Depends(verified_user)])
+@app.get("/logs", dependencies=[Depends(verified_user)], responses=COMMON_ERROR_RESPONSES)
 def get_logs(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
     project_slug: str = "all",
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=10_000),
 ) -> TableOutModel:
     """
     Get all logs for a username/project
@@ -250,7 +278,7 @@ def get_logs(
     )
 
 
-@app.post("/stop", dependencies=[Depends(verified_user)])
+@app.post("/stop", dependencies=[Depends(verified_user)], responses=COMMON_ERROR_RESPONSES)
 def stop_process(
     current_user: Annotated[UserInDBModel, Depends(verified_user)],
     unique_id: str | None = None,
@@ -277,5 +305,7 @@ def stop_process(
             f"STOP PROCESS: {kind if kind is not None else unique_id}",
             "general",
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

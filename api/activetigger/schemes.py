@@ -22,6 +22,7 @@ from activetigger.datamodels import (
 from activetigger.db import DBException
 from activetigger.db.manager import DatabaseManager
 from activetigger.db.projects import ProjectsService
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.functions import clean_regex, regex_contains
 
 
@@ -177,7 +178,7 @@ class Schemes:
         complete : add text from dataset & all the row
         """
         if scheme not in self.available():
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         df = self.get_scheme_data(scheme, user, force)
 
         if id_external:
@@ -198,6 +199,8 @@ class Schemes:
                 elif k == "train":
                     if self.data.train is not None:
                         content.append(self.data.train[cols])
+            if len(content) == 0:
+                raise InvalidInputError("Dataset not recognized")
             df_text = pd.concat(content)
             df = df.join(df_text, rsuffix="_content", how="right")
         df["id_internal"] = df.index
@@ -212,11 +215,14 @@ class Schemes:
         TODO : it is pretty ugly, should be refactored
         """
         if scheme not in self.available():
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
 
         results = self.projects_service.get_table_annotations_users(
             self.project_slug, scheme, dataset
         )
+        if len(results) == 0:
+            empty = pd.DataFrame(columns=["id", "annotations", "text", "current_label"])
+            return empty, [], self._compute_agreement_stats(pd.DataFrame(), [])
         # Shape the data
         df = pd.DataFrame(
             results, columns=["id", "labels", "user", "time", "dataset"]
@@ -252,7 +258,7 @@ class Schemes:
             if self.data.valid is not None:
                 df = df.join(self.data.valid[["text"]], how="left")  # add the text
         else:
-            raise Exception("Dataset not recognized")
+            raise InvalidInputError("Dataset not recognized")
 
         df["current_label"] = current_labels
         df = df[f_multi].reset_index()
@@ -320,6 +326,9 @@ class Schemes:
         Reconciliate an element by adding the selected label for all users
         """
         for u in element.users:
+            # unknown users would violate the annotations FK constraint
+            self.db_manager.users_service.get_user(u)
+        for u in element.users:
             self.push_annotation(
                 element.element_id,
                 element.label,
@@ -347,7 +356,9 @@ class Schemes:
         """
         available = self.available()
         if scheme not in available:
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
+        if not self.exists_label(scheme, former_label):
+            raise NotFoundError(f"Label {former_label} doesn't exist")
         # test if the new label exist, either create it
         if not self.exists_label(scheme, new_label):
             self.add_label(new_label, scheme, username)
@@ -392,7 +403,7 @@ class Schemes:
         if mode not in ["tagged", "untagged", "all"]:
             raise Exception("Mode not available")
         if scheme not in self.available():
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         df = self.get_scheme(scheme, complete=True, datasets=[dataset])
         # build dataset
         if mode == "tagged":
@@ -425,7 +436,7 @@ class Schemes:
         Choice to order by index.
         """
         if batch.scheme not in self.available():
-            raise Exception(f"Scheme {batch.scheme} is not available")
+            raise NotFoundError(f"Scheme {batch.scheme} is not available")
 
         # get all data
         df: DataFrame = self.get_scheme(
@@ -483,7 +494,7 @@ class Schemes:
             if batch.max > len(df):
                 batch.max = len(df)
             if batch.min > len(df):
-                raise Exception(
+                raise InvalidInputError(
                     f"Minimal value {batch.min} is too high. It should not exced the size of the data ({len(df)})"
                 )
 
@@ -508,9 +519,9 @@ class Schemes:
         Add new scheme
         """
         if self.exists(name):
-            raise Exception("Scheme already exists")
+            raise AlreadyExistsError("Scheme already exists")
         if len(set(labels)) < len(labels):
-            raise Exception(f"Labels need to be unique. Received: {labels}")
+            raise InvalidInputError(f"Labels need to be unique. Received: {labels}")
         self.projects_service.add_scheme(self.project_slug, name, labels, kind, user)
 
     def add_label(self, label: str, scheme: str, user: str) -> None:
@@ -519,9 +530,9 @@ class Schemes:
         """
         available = self.available()
         if (label is None) or (label == ""):
-            raise Exception("Label cannot be empty")
+            raise InvalidInputError("Label cannot be empty")
         if scheme not in available:
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         if available[scheme] is None:
             raise Exception("Scheme is not defined")
         if label in available[scheme].labels:
@@ -536,7 +547,7 @@ class Schemes:
         """
         available = self.available()
         if scheme not in available:
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         if label in available[scheme].labels:
             return True
         return False
@@ -547,9 +558,9 @@ class Schemes:
         """
         available = self.available()
         if scheme not in available:
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         if label not in available[scheme].labels:
-            raise Exception("Label doesn't exist")
+            raise NotFoundError("Label doesn't exist")
         labels = available[scheme].labels
         labels.remove(label)
         # push empty entry for tagged elements using batch insert
@@ -587,9 +598,9 @@ class Schemes:
         schemes = self.available()
 
         if scheme_name not in schemes:
-            raise Exception("Scheme does not exist")
+            raise NotFoundError("Scheme does not exist")
         if new_scheme_name in schemes:
-            raise Exception("New name already exists")
+            raise AlreadyExistsError("New name already exists")
 
         self.projects_service.duplicate_scheme(
             self.project_slug, scheme_name, new_scheme_name, username
@@ -602,9 +613,9 @@ class Schemes:
         schemes = self.available()
 
         if old_name not in schemes:
-            raise Exception("Scheme does not exist")
+            raise NotFoundError("Scheme does not exist")
         if new_name in schemes:
-            raise Exception("New name already exists")
+            raise AlreadyExistsError("New name already exists")
 
         self.projects_service.rename_scheme(self.project_slug, old_name, new_name)
 
@@ -614,7 +625,7 @@ class Schemes:
         """
         schemes = self.available()
         if name not in schemes:
-            raise Exception("Scheme does not exist")
+            raise NotFoundError("Scheme does not exist")
         if len(schemes) == 1:
             raise Exception("Cannot delete the last scheme")
 
@@ -653,6 +664,8 @@ class Schemes:
         Delete a recorded tag
         i.e. : add empty label
         """
+        if scheme not in self.available():
+            raise NotFoundError("Scheme doesn't exist")
 
         self.projects_service.add_annotation(
             dataset="delete",
@@ -692,7 +705,7 @@ class Schemes:
         """
 
         if element_id == "noelement":
-            raise Exception("No element id")
+            raise InvalidInputError("No element id")
 
         if mode is None:
             mode = "undefined"
@@ -700,7 +713,7 @@ class Schemes:
         # test if the action is possible
         a = self.available()
         if scheme not in a:
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
 
         # test if the labels used exist in the scheme
         if label is None:
@@ -708,12 +721,12 @@ class Schemes:
 
         if a[scheme].kind == "multiclass":
             if label not in a[scheme].labels and label is not None:
-                raise Exception(f"Label {label} not in the scheme")
+                raise InvalidInputError(f"Label {label} not in the scheme")
 
         elif a[scheme].kind == "multilabel" and label is not None:
             er = [i for i in label.split("|") if i not in a[scheme].labels]
             if len(er) > 0:
-                raise Exception(f"Labels {er} not in the scheme")
+                raise InvalidInputError(f"Labels {er} not in the scheme")
         elif a[scheme].kind == "span":
             print("Span annotation, no label check for the moment")
 
@@ -772,8 +785,8 @@ class Schemes:
         if r["time"] == time:
             try:
                 self.projects_service.update_scheme_codebook(self.project_slug, scheme, codebook)
-            except DBException as e:
-                raise Exception("Codebook not added") from e
+            except DBException:
+                raise
         # if scheme have been modified since the last time
         else:
             new_codebook = f"""
@@ -788,9 +801,9 @@ class Schemes:
                 self.projects_service.update_scheme_codebook(
                     self.project_slug, scheme, new_codebook
                 )
-            except DBException as e:
-                raise Exception("Codebook not added") from e
-            raise Exception("Codebook in conflict, please refresh and arbitrate")
+            except DBException:
+                raise
+            raise AlreadyExistsError("Codebook in conflict, please refresh and arbitrate")
 
     def get_codebook(self, scheme: str) -> CodebookModel:
         """
@@ -803,8 +816,8 @@ class Schemes:
                 content=str(r["codebook"]),
                 time=str(r["time"]),
             )
-        except DBException as e:
-            raise Exception from e
+        except DBException:
+            raise
 
     def add_file_annotations(
         self, annotationsdata: AnnotationsDataModel, file_path: Path, user: str
@@ -815,7 +828,7 @@ class Schemes:
         """
         # check if the scheme exist
         if annotationsdata.scheme not in self.available():
-            raise Exception("Scheme doesn't exist")
+            raise NotFoundError("Scheme doesn't exist")
         else:
             labels = self.available()[annotationsdata.scheme].labels
 
@@ -880,20 +893,21 @@ class Schemes:
 
         labels = self.available()
         if schemeA not in labels:
-            raise Exception("Scheme A doesn't exist")
+            raise NotFoundError("Scheme A doesn't exist")
         if schemeB not in labels:
-            raise Exception("Scheme B doesn't exist")
+            raise NotFoundError("Scheme B doesn't exist")
 
         schemeA_labels = labels[schemeA].labels
         schemeB_labels = labels[schemeB].labels
 
-        # proportion of similar labels
-        labels_overlapping = round(
-            100
-            * len([i for i in schemeA_labels if i in schemeB_labels])
-            / len(set(schemeA_labels + schemeB_labels)),
-            2,
-        )
+        # proportion of similar labels (both schemes may have no labels yet)
+        n_distinct_labels = len(set(schemeA_labels + schemeB_labels))
+        labels_overlapping = 0.0
+        if n_distinct_labels > 0:
+            labels_overlapping = round(
+                100 * len([i for i in schemeA_labels if i in schemeB_labels]) / n_distinct_labels,
+                2,
+            )
 
         df_A = self.get_scheme(schemeA, datasets=[dataset])
         df_B = self.get_scheme(schemeB, datasets=[dataset])

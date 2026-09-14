@@ -24,6 +24,7 @@ from activetigger.datamodels import (
     TextDatasetModel,
     UserInDBModel,
 )
+from activetigger.errors import APIError, InvalidInputError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 from activetigger.uploads import get_upload_staging
@@ -52,6 +53,8 @@ def train_quickmodel(
         get_orchestrator().log_action(
             current_user.username, f"TRAIN SIMPLE MODEL {quickmodel.name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -72,6 +75,8 @@ def retrain_quickmodel(
         get_orchestrator().log_action(
             current_user.username, f"RETRAIN SIMPLE MODEL {name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -91,6 +96,8 @@ def delete_quickmodel(
         get_orchestrator().log_action(
             current_user.username, f"DELETE SIMPLE MODEL + FEATURES: {name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -113,6 +120,8 @@ def rename_quickmodel(
             f"INFO RENAME QUICK MODEL: {former_name} -> {new_name}",
             project.name,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -142,6 +151,8 @@ def get_quickmodel(
             username=sm.user,
             exclude_labels=sm.exclude_labels if hasattr(sm, "exclude_labels") else [],
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -174,7 +185,9 @@ def get_model_information(
                 raise Exception("NER models are not available for this project")
             return project.nermodels.get_informations(name)
         else:
-            raise Exception(f"Model kind {kind} not recognized")
+            raise InvalidInputError(f"Model kind {kind} not recognized")
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         print(f"Erreur in /models/information:\n{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -188,7 +201,7 @@ def predict(
     scheme: str,
     kind: str,
     dataset_type: str = "annotable",
-    batch_size: int = 32,
+    batch_size: int = Query(32, ge=1, le=1024),
     external_dataset: TextDatasetModel | None = None,
 ) -> None:
     """
@@ -205,10 +218,10 @@ def predict(
     try:
         # types of prediction
         if kind not in ["quick", "bert", "image", "ner"]:
-            raise Exception(f"Model kind {kind} not recognized")
+            raise InvalidInputError(f"Model kind {kind} not recognized")
 
         if dataset_type not in ["annotable", "external", "all"]:
-            raise Exception(f"Dataset {dataset_type} not recognized")
+            raise InvalidInputError(f"Dataset {dataset_type} not recognized")
 
         # the external dataset arrives as a staged chunked upload (see
         # activetigger.uploads): move it into the project data folder where
@@ -367,6 +380,8 @@ def delete_bert(
         get_orchestrator().log_action(
             current_user.username, f"DELETE MODEL + FEATURES: {bert_name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -393,6 +408,8 @@ def rename_bert(
             f"INFO RENAME MODEL: {former_name} -> {new_name}",
             project.name,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -451,6 +468,8 @@ def delete_image(
         get_orchestrator().log_action(
             current_user.username, f"DELETE IMAGE MODEL + FEATURES: {image_name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -504,6 +523,8 @@ def delete_ner(
         get_orchestrator().log_action(
             current_user.username, f"DELETE NER MODEL: {ner_name}", project.name
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -528,6 +549,8 @@ def rename_ner(
             f"INFO RENAME NER MODEL: {former_name} -> {new_name}",
             project.name,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -556,5 +579,7 @@ def rename_image(
             f"INFO RENAME IMAGE MODEL: {former_name} -> {new_name}",
             project.name,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

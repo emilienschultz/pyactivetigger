@@ -21,6 +21,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import NotFoundError
 from activetigger.features import Features
 from activetigger.queue_manager import Queue
 from activetigger.tasks.compute_bertopic import ComputeBertopic
@@ -184,7 +185,7 @@ class Bertopic:
         """
         model = self.models_service.get_model(self.project_slug, name)
         if model is None or model.kind != "bertopic":
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
         return Path(model.path)
 
     def state(self) -> BertopicProjectStateModel:
@@ -232,7 +233,7 @@ class Bertopic:
                 "input_datasets='complete' is not supported with existing_feature."
             )
         if not self.features.exists(feature_name):
-            raise ValueError(f"Feature '{feature_name}' does not exist.")
+            raise NotFoundError(f"Feature '{feature_name}' does not exist.")
         feat_info = self.features.get_available().get(feature_name)
         if feat_info is None or feat_info.kind not in self.EMBEDDING_FEATURE_KINDS:
             raise ValueError(
@@ -316,7 +317,7 @@ class Bertopic:
             df_list = df.reset_index().to_dict(orient="records")
             return [TopicsOutModel(**item) for item in df_list]  # ty: ignore[invalid-argument-type]
         else:
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
 
     def get_clusters(self, name: str) -> dict[str, int]:
         """
@@ -330,7 +331,7 @@ class Bertopic:
                 "cluster"
             ]
         else:
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
 
     def get_parameters(self, name: str) -> BertopicOutModelParameters:
         """
@@ -338,7 +339,7 @@ class Bertopic:
         """
         model = self.models_service.get_model(self.project_slug, name)
         if model is None or model.kind != "bertopic":
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
         return BertopicOutModelParameters(**(model.parameters or {}))
 
     def get_projection(self, name: str) -> BertopicProjectionData:
@@ -349,7 +350,7 @@ class Bertopic:
         path_clusters = path_model.joinpath("bertopic_clusters.csv")
         path_projection = path_model.joinpath("projection2D.parquet")
         if not path_clusters.exists() or not path_projection.exists():
-            raise FileNotFoundError(f"Projection for model {name} does not exist.")
+            raise NotFoundError(f"Projection for model {name} does not exist.")
         clusters = pd.read_csv(path_clusters, index_col=0)
         clusters.index = clusters.index.astype(str)
         projection = pd.read_parquet(path_projection)
@@ -385,9 +386,9 @@ class Bertopic:
             if topics_path.exists():
                 return FileResponse(path=topics_path, filename=f"bertopic_topics_{name}.csv")
             else:
-                raise FileNotFoundError(f"Topics for model {name} do not exist.")
+                raise NotFoundError(f"Topics for model {name} do not exist.")
         else:
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
 
     def export_clusters(self, name: str, col_id: str | None = None) -> FileResponse:
         """
@@ -396,10 +397,10 @@ class Bertopic:
         """
         path_model = self._run_path(name)
         if not path_model.exists():
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
         clusters_path = path_model.joinpath("bertopic_clusters.csv")
         if not clusters_path.exists():
-            raise FileNotFoundError(f"Clusters for model {name} do not exist.")
+            raise NotFoundError(f"Clusters for model {name} do not exist.")
 
         if col_id is not None:
             df = pd.read_csv(clusters_path)
@@ -424,9 +425,9 @@ class Bertopic:
             if report_path.exists():
                 return FileResponse(path=report_path, filename=f"bertopic_report_{name}.html")
             else:
-                raise FileNotFoundError(f"Report for model {name} do not exist.")
+                raise NotFoundError(f"Report for model {name} do not exist.")
         else:
-            raise FileNotFoundError(f"Model {name} does not exist.")
+            raise NotFoundError(f"Model {name} does not exist.")
 
     def export_embeddings(self, name: str) -> FileResponse:
         """
@@ -435,7 +436,7 @@ class Bertopic:
         params = self.get_parameters(name)
         path_embeddings = Path(params.path_embeddings)
         if not path_embeddings.exists():
-            raise FileNotFoundError(f"Embeddings for model {name} do not exist.")
+            raise NotFoundError(f"Embeddings for model {name} do not exist.")
         return FileResponse(path=path_embeddings, filename=f"bertopic_embeddings_{name}.parquet")
 
     def export_to_scheme(self, name: str) -> tuple[list[str], dict[str, int], dict[int, str]]:

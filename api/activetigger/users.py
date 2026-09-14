@@ -24,6 +24,7 @@ from activetigger.datamodels import (
     UserStatistics,
 )
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.functions import compare_to_hash, decrypt, encrypt, get_dir_size, get_hash
 from activetigger.messages import Messages
 
@@ -139,8 +140,10 @@ class Users:
         Set user auth for a project
         """
         if auth.status is None:
-            raise Exception("Missing status")
+            raise InvalidInputError("Missing status")
         self.get_user(auth.username)
+        if self.db_manager.projects_service.get_project(auth.project_slug) is None:
+            raise NotFoundError("Project not found")
         self.db_manager.projects_service.add_auth(auth.project_slug, auth.username, auth.status)
 
     def delete_auth(self, username: str, project_slug: str) -> None:
@@ -193,7 +196,7 @@ class Users:
         """
         # test if the user doesn't exist, even among deactivated users
         if new_user.username in self.existing_users(active=False):
-            raise Exception("Username already exists")
+            raise AlreadyExistsError("Username already exists")
         hash_pwd = get_hash(new_user.password)
         self.db_manager.users_service.add_user(
             new_user.username,
@@ -211,7 +214,7 @@ class Users:
         if user_to_delete == "root":
             raise Exception("Can't delete root user")
         if user_to_delete not in self.existing_users():
-            raise Exception("Username does not exist")
+            raise NotFoundError("Username does not exist")
         if user_to_delete not in self.existing_users(username):
             raise Exception("You don't have the right to delete this user")
 
@@ -223,7 +226,7 @@ class Users:
         Get active user from database
         """
         if name not in self.existing_users():
-            raise Exception("Username doesn't exist or is deactivated")
+            raise NotFoundError("Username doesn't exist or is deactivated")
         user = self.db_manager.users_service.get_user(name)
         return UserInDBModel(
             username=name,
@@ -241,11 +244,11 @@ class Users:
         try:
             user = self.get_user(username)
             if not compare_to_hash(password, user.hashed_password):
-                raise Exception("Wrong password")
+                raise InvalidInputError("Wrong password")
             return user
         except Exception:
             self.log_failed_login_attempt(username)
-            raise Exception("Wrong username or password")
+            raise InvalidInputError("Wrong username or password")
 
     def auth(self, username: str, project_slug: str) -> str | None:
         """
@@ -266,7 +269,7 @@ class Users:
             raise Exception("Passwords don't match")
         user = self.get_user(username)
         if not compare_to_hash(password_old, user.hashed_password):
-            raise Exception("Wrong password")
+            raise InvalidInputError("Wrong password")
         hash_pwd = get_hash(password1)
         self.db_manager.users_service.change_password(username, hash_pwd.decode("utf8"))
         return None
@@ -278,10 +281,10 @@ class Users:
         """
         new_email = new_email.strip()
         if not new_email or "@" not in new_email:
-            raise Exception("Invalid email address")
+            raise InvalidInputError("Invalid email address")
         user = self.get_user(username)
         if not compare_to_hash(password, user.hashed_password):
-            raise Exception("Wrong password")
+            raise InvalidInputError("Wrong password")
         try:
             existing = self.db_manager.users_service.get_user_by_mail(new_email)
         except Exception:
@@ -334,7 +337,7 @@ class Users:
         informations = self.db_manager.users_service.get_informations(username)
         credentials = dict(informations.get("credentials", {}))
         if name not in credentials:
-            raise Exception(f"Credentials {name} not found")
+            raise NotFoundError(f"Credentials {name} not found")
         del credentials[name]
         informations["credentials"] = credentials
         self.db_manager.users_service.update_informations(username, informations)
@@ -347,7 +350,7 @@ class Users:
         informations = self.db_manager.users_service.get_informations(username)
         entry = informations.get("credentials", {}).get(name)
         if entry is None:
-            raise Exception(f"Credentials {name} not found")
+            raise NotFoundError(f"Credentials {name} not found")
         return entry.get("endpoint"), decrypt(entry["credentials"], config.secret_key)
 
     def force_change_password(self, username: str, password: str) -> None:

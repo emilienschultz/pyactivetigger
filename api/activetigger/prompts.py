@@ -31,6 +31,7 @@ from activetigger.datamodels import (
     PromptSimilarityComputing,
     PromptsProjectStateModel,
 )
+from activetigger.errors import InvalidInputError, NotFoundError
 from activetigger.features import Features
 from activetigger.queue_manager import Queue
 from activetigger.tasks.base_task import BaseTask
@@ -103,7 +104,7 @@ class Prompts:
         available = self.features.get_available()
         feat = available.get(feature_name)
         if feat is None:
-            raise ValueError(f"Feature '{feature_name}' does not exist")
+            raise NotFoundError(f"Feature '{feature_name}' does not exist")
         if feat.kind not in BINDABLE_FEATURE_KINDS:
             raise ValueError(
                 f"Feature '{feature_name}' kind '{feat.kind}' is not bindable to a prompt "
@@ -125,7 +126,7 @@ class Prompts:
         """
         text = text.strip()
         if not text:
-            raise ValueError("Prompt text cannot be empty")
+            raise InvalidInputError("Prompt text cannot be empty")
         model_name, kind = self._resolve_feature(feature_name)
         prompt_id = str(uuid.uuid4())
 
@@ -205,7 +206,7 @@ class Prompts:
     def get_embedding_and_feature(self, prompt_id: str) -> tuple[np.ndarray, str]:
         df = self._read()
         if prompt_id not in df.index:
-            raise ValueError(f"Prompt '{prompt_id}' not found")
+            raise NotFoundError(f"Prompt '{prompt_id}' not found")
         row = df.loc[prompt_id]
         dim_cols = [c for c in df.columns if c.startswith("dim_")]
         if not dim_cols:
@@ -216,7 +217,7 @@ class Prompts:
     def delete(self, prompt_id: str) -> None:
         df = self._read()
         if prompt_id not in df.index:
-            raise ValueError(f"Prompt '{prompt_id}' not found")
+            raise NotFoundError(f"Prompt '{prompt_id}' not found")
         df = df.drop(index=prompt_id)
         self._write(df)
         self._ranking_cache.pop(prompt_id, None)
@@ -347,7 +348,7 @@ class Prompts:
         task (returns the task unique_id).
         """
         if dataset not in SIMILARITY_DATASETS:
-            raise ValueError(f"Dataset must be one of {sorted(SIMILARITY_DATASETS)}")
+            raise InvalidInputError(f"Dataset must be one of {sorted(SIMILARITY_DATASETS)}")
 
         prompt_vec, feature_name = self.get_embedding_and_feature(prompt_id)
 
@@ -423,9 +424,9 @@ class Prompts:
         # index and known dataset names, otherwise a crafted value could
         # escape the project directory.
         if prompt_id not in self._read().index:
-            raise ValueError(f"Prompt '{prompt_id}' not found")
+            raise NotFoundError(f"Prompt '{prompt_id}' not found")
         if dataset not in SIMILARITY_DATASETS:
-            raise ValueError(f"Dataset must be one of {sorted(SIMILARITY_DATASETS)}")
+            raise InvalidInputError(f"Dataset must be one of {sorted(SIMILARITY_DATASETS)}")
 
         path = self.similarity_file(prompt_id, dataset)
         if not path.exists():

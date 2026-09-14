@@ -14,6 +14,7 @@ from datetime import timezone
 from loky import get_reusable_executor
 
 from activetigger.datamodels import QueueStateTaskModel, QueueTaskModel
+from activetigger.errors import ServerBusyError
 from activetigger.tasks.base_task import BaseTask
 
 multiprocessing.set_start_method("spawn", force=True)
@@ -210,7 +211,7 @@ class Queue:
         """
         # test if the queue is not full
         if len(self.current) > self.max_processes:
-            raise Exception("Queue is full. Wait for process to finish.")
+            raise ServerBusyError("Queue is full. Wait for process to finish.")
 
         # generate a unique id
         unique_id = str(uuid.uuid4())

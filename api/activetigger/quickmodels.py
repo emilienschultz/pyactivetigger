@@ -36,6 +36,7 @@ from activetigger.datamodels import (
 )
 from activetigger.db.languagemodels import ModelsService
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import InvalidInputError, NotFoundError
 from activetigger.functions import concat_text_columns, get_model_metrics
 from activetigger.queue_manager import Queue
 from activetigger.tasks.predict_ml import PredictMLMultiClass
@@ -279,13 +280,13 @@ class QuickModels:
         (cache in memory)
         """
         if not self.exists(name):
-            raise Exception("The model does not exist in database")
+            raise NotFoundError("The model does not exist in database")
         if name in self.loaded:
             return self.loaded[name]
         else:
             path = self.path.joinpath(name)
             if not path.exists():
-                raise Exception("The model path does not exist")
+                raise NotFoundError("The model path does not exist")
             with open(path / "model.pkl", "rb") as file:
                 sm: QuickModelComputed = pickle.load(file)
             return sm
@@ -307,7 +308,7 @@ class QuickModels:
         if sm.proba is None:
             raise ValueError("No probability available for this model")
         if element_id not in sm.proba.index:
-            raise ValueError("Element ID not found in the predictions")
+            raise NotFoundError("Element ID not found in the predictions")
         predicted_label = sm.proba.loc[element_id, "prediction"]
         predicted_proba = round(sm.proba.loc[element_id, predicted_label], 2)
         predicted_entropy = round(sm.proba.loc[element_id, "entropy"], 2)
@@ -462,7 +463,7 @@ class QuickModels:
         Delete a specific quickmodel
         """
         if not self.exists(name):
-            raise Exception("The model does not exist")
+            raise NotFoundError("The model does not exist")
 
         # delete from the database
         self.language_models_service.delete_model(self.project_slug, name)
@@ -492,7 +493,7 @@ class QuickModels:
         Start the predicting process for a specific model
         """
         if not self.exists(name):
-            raise Exception("The model does not exist")
+            raise NotFoundError("The model does not exist")
         sm = self.get(name)
         file_name = f"predict_{dataset}.parquet"
         unique_id = self.queue.add_task(
@@ -581,7 +582,7 @@ class QuickModels:
             c for c in [*external_dataset.cols_text, external_dataset.id] if c not in df.columns
         ]
         if missing:
-            raise ValueError(f"Columns not found in file: {missing}")
+            raise NotFoundError(f"Columns not found in file: {missing}")
 
         texts = concat_text_columns(df, external_dataset.cols_text)
         texts.index = df[external_dataset.id].apply(str)
@@ -708,7 +709,7 @@ class QuickModels:
         """
 
         if not self.exists(model_name):
-            raise Exception(f"The model {model_name} does not exist")
+            raise NotFoundError(f"The model {model_name} does not exist")
         sm = self.get(model_name)
         # params = self.get_parameters(model_name)
         metrics = get_model_metrics(self.path.joinpath(model_name))
@@ -733,7 +734,7 @@ class QuickModels:
         # get model
         model = self.language_models_service.get_model(self.project_slug, former_name)
         if model is None:
-            raise Exception("Model does not exist")
+            raise NotFoundError("Model does not exist")
         if (Path(model.path) / "status.log").exists():
             raise Exception("Model is currently computing")
         self.language_models_service.rename_model(self.project_slug, former_name, new_name)
@@ -750,4 +751,4 @@ class QuickModels:
             for m in existing:
                 self.delete(m.name)
         else:
-            raise ValueError("Kind not recognized")
+            raise InvalidInputError("Kind not recognized")

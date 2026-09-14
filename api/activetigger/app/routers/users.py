@@ -31,6 +31,7 @@ from activetigger.datamodels import (
     UserModel,
     UserStatistics,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 
 router = APIRouter(tags=["users"])
@@ -83,6 +84,8 @@ def disconnect_user(token: Annotated[str, Depends(oauth2_scheme)]) -> None:
     """
     try:
         get_orchestrator().revoke_access_token(token)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -101,6 +104,8 @@ def read_users_me(
             status=current_user.status,
             contact=contact,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -114,6 +119,8 @@ def existing_users(
     """
     try:
         return get_orchestrator().users.existing_users(current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -137,6 +144,8 @@ def create_user(
     test_rights(ServerAction.MANAGE_USERS, current_user.username)
     try:
         get_orchestrator().users.add_user(new_user, current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -153,6 +162,8 @@ def delete_user(
     test_rights(ServerAction.MANAGE_USERS, current_user.username)
     try:
         get_orchestrator().users.delete_user(user_to_delete, current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -169,6 +180,8 @@ def change_password(
         get_orchestrator().users.change_password(
             current_user.username, changepwd.pwdold, changepwd.pwd1, changepwd.pwd2
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -218,6 +231,8 @@ def list_user_credentials(
     """
     try:
         return get_orchestrator().users.list_credentials(current_user.username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -267,6 +282,8 @@ def set_auth(
             orchestrator = get_orchestrator()
             orchestrator.users.set_auth(auth)
             orchestrator.log_action(current_user.username, f"ADD AUTH USER: {auth.username}", "all")
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -279,6 +296,8 @@ def set_auth(
             orchestrator.log_action(
                 current_user.username, f"DELETE AUTH USER: {auth.username}", "all"
             )
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500) from e
 
@@ -299,6 +318,8 @@ def get_statistics(
         test_rights(ServerAction.MANAGE_USERS, current_user.username)
     try:
         return get_orchestrator().users.get_statistics(username)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

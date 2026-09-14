@@ -15,6 +15,7 @@ from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from activetigger.datamodels import (
     UserInDBModel,
 )
+from activetigger.errors import APIError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 
@@ -60,6 +61,8 @@ async def get_project(project_slug: str) -> Project:
         try:
             await asyncio.to_thread(orchestrator.manage_fifo_queue)
             await asyncio.to_thread(orchestrator.start_project, project_slug)
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 

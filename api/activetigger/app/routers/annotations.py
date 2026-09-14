@@ -21,6 +21,7 @@ from activetigger.datamodels import (
     UserInDBModel,
     WaitingModel,
 )
+from activetigger.errors import APIError, InvalidInputError
 from activetigger.orchestrator import get_orchestrator
 from activetigger.project import Project
 from activetigger.uploads import get_upload_staging
@@ -43,6 +44,8 @@ def get_next(
             next=next.model_copy(update={"n": 1}),
             username=current_user.username,
         )[0]
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -62,6 +65,8 @@ def get_next_batch(
             next=next,
             username=current_user.username,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -86,6 +91,8 @@ def get_projection(
         return project.get_projection(
             projection_name=projection_name, scheme=scheme, active_model=active_model
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -143,6 +150,8 @@ def delete_projection(
             project.project_slug,
         )
         return WaitingModel(detail=f"Projection {projection_name} deleted")
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -159,6 +168,8 @@ def get_list_elements(
     test_rights(ProjectAction.GET, current_user.username, project.name)
     try:
         return project.schemes.get_table(batch)
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -181,8 +192,10 @@ def post_list_elements(
             project.name,
         )
         if errors is not None:
-            raise Exception(f"Errors during annotations update: {errors}")
+            raise InvalidInputError(f"Errors during annotations update: {errors}")
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -214,7 +227,7 @@ def post_annotation_file(
         # consumed only on success so a failed import can be retried
         staging.discard(current_user.username, annotationsdata.upload_id)
         return None
-    except HTTPException:
+    except (HTTPException, APIError, OverflowError):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -235,6 +248,8 @@ def get_element(
             element=element,
             user=current_user.username,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -259,6 +274,8 @@ def get_reconciliation_table(
             users=users,
             **agreement_stats,
         )
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -281,6 +298,8 @@ def post_reconciliation(
             project.name,
         )
         return None
+    except (HTTPException, APIError, OverflowError):
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -321,6 +340,8 @@ def post_annotation(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -340,6 +361,8 @@ def post_annotation(
                 project.name,
             )
             return None
+        except (HTTPException, APIError, OverflowError):
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 

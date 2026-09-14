@@ -57,11 +57,12 @@ export const HomePage: FC = () => {
     setAppContext((prev) => ({ ...prev, developmentMode: !prev.developmentMode }));
   };
 
+  const { version, mode, messages } = useGetServer(null);
+
   // possibility to log directly from the URL
   const navigate = useNavigate();
   const params = new URLSearchParams(window.location.search);
   const { login } = useAuth();
-  const { version, mode, messages } = useGetServer(null);
   if (params.get('username') && params.get('password')) {
     login({
       username: params.get('username'),

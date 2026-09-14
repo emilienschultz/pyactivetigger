@@ -5,6 +5,7 @@ from email.message import EmailMessage
 from activetigger.config import config
 from activetigger.datamodels import MessagesOutModel
 from activetigger.db.manager import DatabaseManager
+from activetigger.errors import InvalidInputError
 
 
 class Messages:
@@ -131,9 +132,16 @@ class Messages:
         Get messages
         """
         if kind == "system":
-            return self.get_messages_system()
-        else:
-            raise Exception(f"Unknown message kind: {kind}")
+            return self.get_messages_system(from_user)
+        if kind == "project":
+            if not for_project:
+                raise InvalidInputError("for_project is required for kind='project'")
+            return self.get_messages_for_project(for_project)
+        if kind == "user":
+            if not for_user:
+                raise InvalidInputError("for_user is required for kind='user'")
+            return self.get_messages_for_user(for_user)
+        raise InvalidInputError(f"Unknown message kind: {kind}")
 
     def add_message(
         self, user_name: str, kind: str, content: str, property: dict | None = None

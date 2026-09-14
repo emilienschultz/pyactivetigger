@@ -17,6 +17,7 @@ from activetigger.datamodels import (
     FeaturesProjectStateModel,
 )
 from activetigger.db.projects import ProjectsService
+from activetigger.errors import AlreadyExistsError, InvalidInputError, NotFoundError
 from activetigger.queue_manager import Queue
 from activetigger.tasks.compute_bert_embeddings import ComputeBertEmbeddings
 from activetigger.tasks.compute_clip_imagexp import ComputeClipImagexp
@@ -335,14 +336,14 @@ class Features:
         if not id_column:
             raise ValueError("ID column is required")
         if id_column not in df.columns:
-            raise ValueError(f"ID column '{id_column}' not found in file")
+            raise InvalidInputError(f"ID column '{id_column}' not found in file")
 
         if columns:
             mode = "select"
             target = [c for c in columns if c and c != id_column]
             missing_cols = [c for c in target if c not in df.columns]
             if missing_cols:
-                raise ValueError(f"Columns not found in file: {missing_cols}")
+                raise NotFoundError(f"Columns not found in file: {missing_cols}")
         else:
             mode = "embedding"
             target = [c for c in df.columns if c != id_column]
@@ -410,7 +411,7 @@ class Features:
 
         # test name
         if name in self.map:
-            raise Exception("Feature already exists")
+            raise AlreadyExistsError("Feature already exists")
 
         # test length
         if len(new_content) != self.n:
@@ -457,7 +458,7 @@ class Features:
         self._raise_if_extending()
 
         if not self.exists(name):
-            raise Exception("Feature doesn't exist")
+            raise NotFoundError("Feature doesn't exist")
 
         # remember kind before the DB row is gone, so the on_delete hook
         # (e.g. prompts cascade) can dispatch on it.
@@ -510,7 +511,7 @@ class Features:
                 missing.append(i)
         if len(missing) > 0:
             # not necessary but to assure consistency
-            raise ValueError(f"Missing features: {missing}. They may have been deleted.")
+            raise NotFoundError(f"Missing features: {missing}. They may have been deleted.")
 
         # load only needed data from file
         data = pd.read_parquet(self.path_features, columns=cols)
@@ -532,7 +533,7 @@ class Features:
     def info(self, name: str):
         feature = self.projects_service.get_feature(self.project_slug, name)
         if feature is None:
-            raise Exception("Feature doesn't exist in database")
+            raise NotFoundError("Feature doesn't exist in database")
         return {
             "time": feature.time,
             "name": name,
@@ -557,7 +558,7 @@ class Features:
         parquet_file = pq.ParquetFile(self.path_all)
         column_names = parquet_file.schema.names
         if column_name not in list(column_names):
-            raise Exception("Column doesn't exist")
+            raise NotFoundError("Column doesn't exist")
         df = pd.read_parquet(self.path_all, columns=[column_name])
         if index == "annotable":  # filter only train id
             df_annotable = pd.read_parquet(self.path_features, columns=[])  # only the index
@@ -565,7 +566,7 @@ class Features:
         elif index == "all":
             return df[column_name]
         else:
-            raise Exception("Index not recognized")
+            raise InvalidInputError("Index not recognized")
 
     def current_user_processes(self, user: str):
         return [e for e in self.computing if getattr(e, "user", None) == user]
@@ -680,7 +681,7 @@ class Features:
             "image-embeddings",
             "multimodal-embeddings",
         }:
-            raise ValueError("Kind not recognized")
+            raise InvalidInputError("Kind not recognized")
 
         # Experimental image projects: gate text-only feature kinds.
         if self.kind == "image" and kind not in {
@@ -694,7 +695,7 @@ class Features:
 
         name = self.__create_pretty_name(kind, name, use_default_name, parameters)
         if self.exists(name):
-            raise ValueError("This name already exists")
+            raise AlreadyExistsError("This name already exists")
 
         if kind == "regex":
             if "value" not in parameters:
@@ -825,7 +826,7 @@ class Features:
                 ui_label = DEFAULT_IMAGE_EMBEDDING_MODEL_IMAGEXP
             spec = IMAGE_EMBEDDING_MODELS_IMAGEXP.get(ui_label)
             if spec is None:
-                raise ValueError(f"Unknown image embedding model: {ui_label}")
+                raise InvalidInputError(f"Unknown image embedding model: {ui_label}")
 
             batch_size = int(parameters.get("batch_size", 16))
             unique_id = self.queue.add_task(
@@ -855,7 +856,7 @@ class Features:
                 ui_label = DEFAULT_MULTIMODAL_EMBEDDING_MODEL
             hf_name = MULTIMODAL_EMBEDDING_MODELS.get(ui_label)
             if hf_name is None:
-                raise ValueError(f"Unknown multimodal embedding model: {ui_label}")
+                raise InvalidInputError(f"Unknown multimodal embedding model: {ui_label}")
 
             batch_size = int(parameters.get("batch_size", 8))
             unique_id = self.queue.add_task(
@@ -994,7 +995,7 @@ class Features:
                 raise ValueError("No test dataset available")
             return self.data.test[column]
         if dataset != "all":
-            raise ValueError(f"Unknown dataset '{dataset}'")
+            raise InvalidInputError(f"Unknown dataset '{dataset}'")
         parts: list[Series] = [self.data.train[column]]
         if self.data.valid is not None:
             parts.append(self.data.valid[column])

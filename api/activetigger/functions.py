@@ -32,6 +32,7 @@ from torch.nn import Sigmoid
 
 from activetigger.config import config
 from activetigger.datamodels import GpuInformationModel, MLStatisticsModel
+from activetigger.errors import InvalidInputError, NotFoundError
 
 
 def slugify(text: str, way: str = "file") -> str:
@@ -43,7 +44,7 @@ def slugify(text: str, way: str = "file") -> str:
     elif way == "url":
         return quote(text, safe="")
     else:
-        raise ValueError("Invalid way parameter. Use 'file' or 'url'.")
+        raise InvalidInputError("Invalid way parameter. Use 'file' or 'url'.")
 
 
 def sanitize_uploaded_filename(filename: str) -> str:
@@ -695,11 +696,11 @@ def get_model_metrics(path_model: Path) -> dict | None:
     - last computed metrics
     """
     if not path_model.exists():
-        raise Exception(f"The folder {path_model} does not exist")
+        raise NotFoundError(f"The folder {path_model} does not exist")
 
     # training metrics
     if not path_model.joinpath("metrics_training.json").exists():
-        raise Exception(f"The file metrics_training.json does not exist in {path_model}")
+        raise NotFoundError(f"The file metrics_training.json does not exist in {path_model}")
     with open(
         path_model.joinpath("metrics_training.json"),
         "r",
