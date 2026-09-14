@@ -434,7 +434,7 @@ class TrainBert(BaseTask):
         training_args = TrainingArguments(
             # Directories
             output_dir=str(current_path.joinpath("train")),
-            logging_dir=str(current_path.joinpath("logs")),
+            #logging_dir=str(current_path.joinpath("logs")),
             # Hyperparameters
             learning_rate=float(params.lrate),
             weight_decay=float(params.wdecay),
