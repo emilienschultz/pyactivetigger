@@ -10,4 +10,8 @@ services:
     environment:
       - DATA_PATH=/data
       - CPU_ONLY=false
+      - USER_ID=${USER_ID}
+      - GROUP_ID=${GROUP_ID}
+      - UV_CACHE_DIR=/home/python/.cache/uv
+      - HF_HOME=/home/python/.cache/huggingface
     env_file: ".env"
