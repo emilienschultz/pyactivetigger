@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
 
+import celery
 import pandas as pd
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
@@ -389,6 +390,7 @@ class Project:
         params.dir = path.joinpath(self.project_slug)
 
         # start a create project task
+        unique_id = celery.uuid()
         create_project_task.s(CreateProjectTaskInput(
                 image_project=False,
                 project_slug=self.project_slug,
@@ -402,6 +404,19 @@ class Project:
                 random_seed=config.random_seed,)
                 # it's mandatory to dump the model to a JSON compatible dict
                 .model_dump(mode='json')).apply_async()
+        
+         # Update the register
+        self.computing.append(
+            ProjectCreatingModel(
+                user=username,
+                project_slug=self.project_slug,
+                unique_id=unique_id,
+                time=datetime.now(timezone.utc),
+                kind="create_project",
+                status="training"
+            )
+        )
+
 
     def start_project_creation_imagexp(
         self, params: ProjectBaseModel, username: str, path: Path
@@ -2488,7 +2503,9 @@ class Project:
         Clean a process from computing and queue
         """
         self.computing.remove(e)
-        self.queue.delete(e.unique_id)
+        # task manged by celery are not in the queue
+        if e.managed_by_celery == False:
+            self.queue.delete(e.unique_id)
 
     def _recover_generations_from_jsonl(self, path: Path) -> None:
         """
@@ -2531,7 +2548,7 @@ class Project:
         add_predictions = {}
 
         # loop on the current process
-        for e in self.computing.copy():
+        for e  in [e for e in self.computing.copy() if e.managed_by_celery != True]:
             # get the process
             process = self.queue.get(e.unique_id)
             if process is None:

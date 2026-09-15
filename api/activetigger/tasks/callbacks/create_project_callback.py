@@ -38,6 +38,9 @@ class CreateProjectCallback(TaskCallback):
         orchestrator = get_orchestrator()
         try:
             project_manager = orchestrator.project_creation_ongoing[project.project_slug]
+            for e in project_manager.computing:
+                if e.unique_id == task_id:
+                    project_manager.clean_process(e)
             project_manager.finish_project_creation(
                 task_result['username'],
                 project,
@@ -67,6 +70,9 @@ class CreateProjectCallback(TaskCallback):
         try:
             task_input = CreateProjectTaskInput(**task_report['task_args'][0])
             project_manager = orchestrator.project_creation_ongoing[task_input.project_slug]
+            for e in project_manager.computing:
+                if e.unique_id == task_id:
+                    project_manager.clean_process(e)
             project_manager.status = 'error'
             project_manager.errors.add(f"Error for process {CreateProjectTask.name} : {task_report['exception']}")
         except KeyError:

@@ -33,6 +33,9 @@ class ComputeBertEmbeddingsCallback(TaskCallback):
         orchestrator = get_orchestrator()
         try:
             project_manager = orchestrator.projects[task_result['project_slug']]
+            for e in project_manager.computing:
+                if e.unique_id == task_id:
+                    project_manager.clean_process(e)
             project_manager.features.add(
                 name=task_result['parameters']['name'],
                 kind="compute_bert_features",
@@ -52,7 +55,11 @@ class ComputeBertEmbeddingsCallback(TaskCallback):
         orchestrator = get_orchestrator()
         try:
             task_input = ComputeBertEmbeddingsTaskInput(**task_report['task_args'][0])
+
             project_manager = orchestrator.projects[task_input.project_slug]
+            for e in project_manager.computing:
+                if e.unique_id == task_id:
+                    project_manager.clean_process(e)
             project_manager.status = 'error'
             # TODO: this message is generic on any GPU task
             message = (

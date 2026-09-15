@@ -2,12 +2,14 @@ import json
 import os
 from collections.abc import Callable
 from datetime import datetime, timezone
+from enum import unique
 from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
 import pyarrow.parquet as pq
 import regex
+from celery import uuid
 from pandas import DataFrame, Series
 from task_manager.tasks.compute_bert_embeddings_task import (
     ComputeBertEmbeddingsTaskInput,
@@ -687,6 +689,10 @@ class Features:
         }:
             raise InvalidInputError("Kind not recognized")
 
+        # internal flag to distinguish task managed by celery from those manage by the internal queue
+        # this flag is used temporarly to keep the existing monitoring system while having some tasks in celery
+        task_managed_by_celery = False
+
         # Experimental image projects: gate text-only feature kinds.
         if self.kind == "image" and kind not in {
             "image-embeddings",
@@ -803,6 +809,9 @@ class Features:
             max_length_tokens = int(parameters.get("max_length_tokens", 512))
             batch_size = int(parameters.get("batch_size", 32))
             # queue celery task
+            # generate an id to add it to computing
+            unique_id = uuid()
+            task_managed_by_celery =True
             compute_bert_embeddings.s(ComputeBertEmbeddingsTaskInput(
                 feature_name=name,
                 username = username,
@@ -815,9 +824,18 @@ class Features:
                 batch_size=batch_size,
                 max_tokens=max_length_tokens,
             )# it's mandatory to dump the model to a JSON compatible dict
-            .model_dump(mode='json')).apply_async()
-            # do not add the task in computing
-            return None
+            .model_dump(mode='json')).apply_async(task_id=unique_id)
+
+            parameters = {
+                "model": model_name,
+                "pooling": pooling,
+                "name": name,
+                "kind": kind,
+                "username": username,
+                "max_length_tokens": max_length_tokens,
+                "batch_size": batch_size,
+            }
+            
         if kind == "image-embeddings":
             # Resolve UI label -> (open_clip model, pretrained tag)
             ui_label = parameters.get("model") or DEFAULT_IMAGE_EMBEDDING_MODEL_IMAGEXP
@@ -927,6 +945,7 @@ class Features:
                     user=username,
                     name=name,
                     time=datetime.now(timezone.utc),
+                    managed_by_celery=task_managed_by_celery
                 )
             )
             return None
@@ -1010,7 +1029,8 @@ class Features:
             with open(self.path_all.parent.joinpath(unique_id), "r") as f:
                 r = f.read()
             return r
-        except Exception:
+        except Exception as e:
+            print(e)
             return None
 
     def state(self) -> FeaturesProjectStateModel:

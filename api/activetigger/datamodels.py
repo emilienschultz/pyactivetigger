@@ -722,6 +722,7 @@ class ProcessComputing(BaseModel):
     unique_id: str
     time: datetime.datetime
     kind: str
+    managed_by_celery: bool | None = None
 
 
 class UpdateComputing(ProcessComputing):
@@ -1441,13 +1442,13 @@ class ExportGenerationsParams(BaseModel):
     filters: list[str] = []
 
 
-class ProjectCreatingModel(BaseModel):
+class ProjectCreatingModel(ProcessComputing):
     project_slug: str
-    username: str
     unique_id: str
     time: datetime.datetime
     kind: str
     status: str
+    managed_by_celery: Literal[True] | None = True
 
 
 class TopicsOutModel(BaseModel):

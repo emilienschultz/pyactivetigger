@@ -30,8 +30,9 @@ def start_gpu_worker_pool():
     args = [
         "worker",
         f"--loglevel={config.worker_loglevel}",
+        # we might need to create one queue by GPU device having each pool solo
         f"--concurrency={config.gpu_worker_concurrency}",
-        "-Psolo",
+        "--pool=solo",
         f"--queues={QueueName.GPU}",
         "--hostname=worker_gpu@%h",
         # "--purge",
